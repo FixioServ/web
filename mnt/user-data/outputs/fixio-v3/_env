@@ -1,0 +1,57 @@
+# ==========================================================================
+# CONFIGURACIÓN DE ENTORNO - FIXIO
+# IMPORTANTE: este archivo debe llamarse exactamente ".env" (con punto inicial)
+# ==========================================================================
+PORT=5500
+NODE_ENV=development
+
+# Deja '*' solo en desarrollo. En producción escribe tu dominio real.
+ALLOWED_ORIGINS=*
+
+# Base de Datos
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=
+# Nombre interno de la BD (puedes mantenerlo aunque la marca ahora sea Fixio)
+DB_NAME=tuservicioexpress
+
+# Seguridad
+# IMPORTANTE (producción): usa una clave larga y aleatoria como la de ejemplo de abajo
+# JWT_SECRET=b8f3a7e088cff0c2b9474adcefd7d371781e907e0b9db326664af562331b5996
+JWT_SECRET=cambia_esta_clave_super_secreta_2026
+
+# URL pública del servidor (producción). Se usa para construir los enlaces de imágenes.
+# Ej: APP_URL=https://fixio.com.ve
+APP_URL=
+
+# Cuenta que será promovida a administrador automáticamente al arrancar
+ADMIN_EMAIL=Espinaandres23@gmail.com
+
+# Modelo de negocio: % de comisión por trabajo y días de gracia antes del bloqueo
+COMISION_PORCENTAJE=15
+DIAS_LIMITE_DEUDA=30
+
+# Google Maps (opcional). Si dejas esto vacío, la app usa OpenStreetMap (Leaflet).
+# Obtén tu clave en https://console.cloud.google.com (Maps JavaScript API)
+GOOGLE_MAPS_API_KEY=
+
+# Correo real para los códigos de registro/recuperación (Nodemailer).
+# Si queda vacío, los códigos se imprimen en la consola del servidor (solo desarrollo).
+# GMAIL: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=tucorreo@gmail.com
+#        SMTP_PASS=contraseña de aplicación (Google > Seguridad > Verificación en 2 pasos > Contraseñas de aplicación)
+# BREVO: SMTP_HOST=smtp-relay.brevo.com, SMTP_PORT=587 (300 correos/día gratis)
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM="Fixio <no-responder@fixio.com>"
+
+# Notificaciones por Telegram (opcional)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+# Almacenamiento opcional en la nube (vacío = almacenamiento local)
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=

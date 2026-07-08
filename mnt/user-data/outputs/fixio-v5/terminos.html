@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="favicon.png">
+<meta name="theme-color" content="#0a3a61">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Términos y Privacidad - Fixio</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script>
+    (function() {
+        const prefSis = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('themePreference') || prefSis);
+    })();
+</script>
+<style>
+    :root { --bg: #f5f7fb; --card: #ffffff; --texto: #1e293b; --muted: #64748b; --azul: #0a3a61; --dorado: #b8871f; --borde: rgba(0,0,0,0.08); }
+    html[data-theme="dark"] { --bg: #0b1428; --card: #141d33; --texto: #e8eefc; --muted: #9fb0d0; --azul: #6ba3f5; --dorado: #e0a935; --borde: rgba(255,255,255,0.1); color-scheme: dark; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--texto); line-height: 1.65; padding: 24px 16px 60px; }
+    .contenedor { max-width: 760px; margin: 0 auto; background: var(--card); border: 1px solid var(--borde); border-radius: 18px; padding: 32px 28px; }
+    h1 { color: var(--azul); font-size: 1.5rem; margin-bottom: 4px; }
+    .fecha { color: var(--muted); font-size: 0.8rem; font-weight: 700; margin-bottom: 24px; }
+    h2 { color: var(--azul); font-size: 1.05rem; margin: 24px 0 8px; }
+    p, li { font-size: 0.92rem; color: var(--texto); margin-bottom: 10px; }
+    ul { padding-left: 22px; }
+    .aviso { background: rgba(224,169,53,0.12); border: 1px dashed var(--dorado); border-radius: 12px; padding: 14px; font-size: 0.85rem; font-weight: 700; margin-bottom: 24px; }
+    .volver { display: inline-block; margin-top: 28px; color: var(--azul); font-weight: 800; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="contenedor">
+    <h1>Términos de Uso y Política de Privacidad</h1>
+    <div class="fecha">Fixio · Última actualización: julio de 2026</div>
+
+    <div class="aviso">Documento plantilla: antes del lanzamiento comercial, este texto debe ser revisado y adaptado por un abogado según la legislación venezolana vigente.</div>
+
+    <h2>1. Qué es Fixio</h2>
+    <p>Fixio es una plataforma de intermediación que conecta a personas que necesitan un servicio (clientes) con profesionales independientes (trabajadores). Fixio no ejecuta los servicios ni emplea a los trabajadores: cada profesional actúa por cuenta propia.</p>
+
+    <h2>2. Registro y cuentas</h2>
+    <ul>
+        <li>Debes ser mayor de edad y proporcionar información veraz al registrarte.</li>
+        <li>Eres responsable de mantener la confidencialidad de tu contraseña.</li>
+        <li>Fixio puede suspender cuentas que incumplan estos términos o incurran en fraude, acoso o conductas indebidas.</li>
+    </ul>
+
+    <h2>3. Servicios, pagos y comisiones</h2>
+    <ul>
+        <li>El precio de cada servicio se acuerda libremente entre cliente y trabajador a través de las ofertas de la plataforma.</li>
+        <li>El pago del servicio se realiza directamente entre cliente y trabajador; Fixio registra el pago como referencia.</li>
+        <li>Fixio cobra al trabajador una comisión sobre cada trabajo completado (porcentaje vigente indicado en el panel). Las comisiones no pagadas dentro del plazo establecido pueden ocasionar la suspensión temporal de la cuenta hasta saldar la deuda.</li>
+        <li>Los montos se expresan en USD con su equivalente referencial en bolívares según la tasa oficial del BCV.</li>
+    </ul>
+
+    <h2>4. Responsabilidad</h2>
+    <ul>
+        <li>Fixio verifica la identidad de los trabajadores de forma documental, pero no garantiza el resultado de los servicios prestados.</li>
+        <li>Las calificaciones y comentarios reflejan la opinión de los usuarios, no de Fixio.</li>
+        <li>Los usuarios acuerdan resolver de buena fe cualquier controversia derivada de un servicio; Fixio puede mediar sin que ello constituya una obligación.</li>
+    </ul>
+
+    <h2>5. Datos personales que tratamos</h2>
+    <ul>
+        <li><strong>Identificación:</strong> nombre, apellido, correo, teléfono y, en el caso de trabajadores, documento de identidad para la verificación.</li>
+        <li><strong>Ubicación:</strong> coordenadas GPS que decidas compartir para localizar solicitudes o calcular distancias.</li>
+        <li><strong>Actividad:</strong> solicitudes, ofertas, mensajes del chat, pagos registrados y calificaciones.</li>
+    </ul>
+    <p>Usamos estos datos exclusivamente para operar la plataforma: conectar clientes con trabajadores, calcular cercanía, verificar identidades, procesar comisiones y mejorar el servicio. No vendemos tus datos a terceros.</p>
+
+    <h2>6. Tus derechos</h2>
+    <p>Puedes solicitar la corrección o eliminación de tus datos escribiendo al correo de soporte de Fixio. Al eliminar tu cuenta, conservaremos únicamente los registros necesarios por obligaciones legales o de facturación.</p>
+
+    <h2>7. Cambios a estos términos</h2>
+    <p>Fixio puede actualizar estos términos; los cambios relevantes se notificarán dentro de la plataforma. El uso continuado tras la notificación implica la aceptación de la nueva versión.</p>
+
+    <a class="volver" href="index.html">&#8592; Volver a Fixio</a>
+</div>
+</body>
+</html>

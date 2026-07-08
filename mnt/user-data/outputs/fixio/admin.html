@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Fixio - Centro de Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+    // Aplicar tema guardado antes de pintar
+    (function() {
+        const prefSis = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('themePreference') || prefSis);
+    })();
+    // BLINDAJE: si no hay sesión de administrador, salir ANTES de renderizar nada.
+    (function() {
+        const t = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
+        const r = localStorage.getItem('userRol') || sessionStorage.getItem('userRol');
+        if (!t || r !== 'admin') {
+            localStorage.removeItem('userToken'); localStorage.removeItem('userRol');
+            sessionStorage.clear();
+            window.location.replace('index.html');
+        }
+    })();
+</script>
+<style>
+    :root {
+        --brand-blue: #0a3a61; --brand-blue-dark: #062741;
+        --brand-yellow: #e0a935; --brand-yellow-dark: #b8871f;
+        --brand-gradient: linear-gradient(135deg, #0a3a61 0%, #062741 100%);
+        --bg: #f5f7fb; --card-bg: #ffffff;
+        --text-dark: #1e293b; --text-muted: #64748b;
+        --border-color: rgba(0,0,0,0.07); --danger: #ef4444;
+        --admin-color: #4f46e5; --admin-soft: #e0e7ff;
+        --surface-soft: #f1f5f9; --surface-softer: #f8fafc; --surface-hover: #e2e8f0;
+        --success-soft: #ecfdf5; --success-text: #15803d;
+        --danger-soft: #fef2f2; --danger-text: #b91c1c;
+    }
+    html[data-theme="dark"] {
+        --bg: #0b1428; --card-bg: #141d33;
+        --text-dark: #e8eefc; --text-muted: #9fb0d0;
+        --border-color: rgba(255,255,255,0.10); --danger: #f87171;
+        --admin-color: #818cf8; --admin-soft: #27306b;
+        --surface-soft: #1e2a47; --surface-softer: #182238; --surface-hover: #253355;
+        --success-soft: #0d2b1d; --success-text: #4ade80;
+        --danger-soft: #351518; --danger-text: #fca5a5;
+        color-scheme: dark;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text-dark); min-height: 100vh; padding-bottom: 80px; transition: background 0.3s ease; }
+
+    /* Barra Superior Admin */
+    .topbar { background: var(--card-bg); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.04); position: sticky; top: 0; z-index: 100; border-bottom: 3px solid var(--admin-color); }
+    .topbar .logo-row { display: flex; align-items: center; gap: 10px; }
+    .topbar img { height: 34px; background: #fff; border-radius: 8px; padding: 2px 6px; }
+    .topbar .greeting { font-weight: 800; font-size: 0.95rem; }
+    .topbar .actions { display: flex; gap: 8px; }
+    .icon-btn { background: var(--surface-soft); color: var(--text-dark); border: none; width: 38px; height: 38px; border-radius: 10px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition: 0.2s; }
+    .icon-btn:hover { background: var(--surface-hover); }
+    .admin-badge { background: var(--admin-soft); color: var(--admin-color); padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; margin-left: 8px;}
+
+    .app-view { display: none; animation: fadeIn 0.3s ease; }
+    .app-view.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .container { max-width: 900px; margin: 0 auto; padding: 18px; }
+    .section-title { font-size: 1.1rem; font-weight: 800; margin: 10px 0 20px; color: var(--text-dark); display: flex; justify-content: space-between; align-items: center;}
+
+    /* Tarjetas de Dashboard */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .stat-card { background: var(--card-bg); border-radius: 16px; padding: 18px; border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02); transition: transform 0.2s; }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-soft); display: flex; align-items: center; justify-content: center; color: var(--admin-color); margin-bottom: 10px; }
+    .stat-value { font-size: 1.6rem; font-weight: 800; color: var(--text-dark); line-height: 1; margin-bottom: 4px;}
+    .stat-label { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+    .stat-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: 700; margin-top: 4px; }
+
+    .highlight-card { background: linear-gradient(135deg, var(--admin-color), #7c3aed); color: #fff; border: none; }
+    .highlight-card .stat-icon { background: rgba(255,255,255,0.18); color: #fff; }
+    .highlight-card .stat-value, .highlight-card .stat-label, .highlight-card .stat-sub { color: #fff; }
+
+    /* Buscador y filtros */
+    .search-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-input { flex: 1; min-width: 200px; padding: 0.7rem 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.9rem; font-family: inherit; outline: none; color: var(--text-dark); }
+    .search-input:focus { border-color: var(--admin-color); }
+    .filter-chip { padding: 8px 14px; border-radius: 20px; border: 1px solid var(--border-color); background: var(--card-bg); font-size: 0.8rem; font-weight: 800; cursor: pointer; color: var(--text-muted); transition: 0.2s; }
+    .filter-chip.active { background: var(--admin-color); color: #fff; border-color: var(--admin-color); }
+
+    /* Listas y Tarjetas de Gestión */
+    .data-list { display: flex; flex-direction: column; gap: 12px; }
+    .data-card { background: var(--card-bg); border-radius: 16px; padding: 16px 18px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease; gap: 10px; flex-wrap: wrap;}
+    .data-card:hover { border-color: var(--admin-color); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.08); }
+    .data-info { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .data-icon { width: 42px; height: 42px; border-radius: 50%; background: var(--brand-gradient); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem; flex-shrink: 0; }
+    .data-title { font-weight: 800; font-size: 0.95rem; color: var(--text-dark); margin-bottom: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;}
+    .data-meta { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;}
+
+    .role-tag { font-size: 0.68rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; }
+    .tag-cliente { background: var(--surface-soft); color: var(--text-muted); }
+    .tag-trabajador { background: #fff7e6; color: #b45309; }
+    .tag-admin { background: var(--admin-soft); color: var(--admin-color); }
+    .tag-verificado { background: var(--success-soft); color: var(--success-text); }
+    .tag-noverificado { background: var(--danger-soft); color: var(--danger-text); }
+
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px;}
+    .status-activo { background: #22c55e; }
+    .status-suspendido { background: #ef4444; }
+
+    /* Chips de estado de solicitudes */
+    .estado-chip { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; }
+    .estado-buscando { background: #fff7e6; color: #b45309; }
+    .estado-asignado, .estado-en_camino, .estado-en_proceso { background: #dbeafe; color: #1e40af; }
+    .estado-completado { background: var(--success-soft); color: var(--success-text); }
+    .estado-cancelado { background: var(--danger-soft); color: var(--danger-text); }
+
+    /* Botones de acción */
+    .action-group { display: flex; gap: 8px; }
+    .btn-action { width: 36px; height: 36px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+    .btn-verify { background: var(--success-soft); color: var(--success-text); }
+    .btn-verify:hover { filter: brightness(0.95); }
+    .btn-suspend { background: var(--danger-soft); color: var(--danger-text); }
+    .btn-suspend:hover { filter: brightness(0.95); }
+
+    .btn-primary { background: var(--admin-color); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 800; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); display: flex; justify-content: center; align-items: center; gap: 8px;}
+    .btn-primary:hover { filter: brightness(0.92); }
+    .btn-secondary { background: var(--surface-soft); color: var(--text-dark); border: none; padding: 10px 20px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;}
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.95rem; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 12px;}
+
+    /* Modales, Formularios y Toasts */
+    .form-group { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+    .form-input, select.form-input { width: 100%; padding: 0.7rem 1rem; background: var(--surface-softer); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.92rem; font-family: inherit; outline: none; color: var(--text-dark); }
+    .form-input:focus { border-color: var(--admin-color); }
+
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(3px); opacity: 0; animation: fadeInModal 0.2s forwards; }
+    .modal-content { background: var(--card-bg); width: 90%; max-width: 420px; border-radius: 16px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transform: translateY(20px); animation: slideUpModal 0.2s forwards; }
+    @keyframes fadeInModal { to { opacity: 1; } }
+    @keyframes slideUpModal { to { transform: translateY(0); } }
+
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast { background: var(--card-bg); border-radius: 8px; padding: 14px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 12px; animation: slideInRight 0.3s forwards; font-weight: 700; font-size: 0.9rem; color: var(--text-dark); border-left: 5px solid transparent; }
+    .toast.success { border-left-color: #15803d; }
+    .toast.error { border-left-color: #b91c1c; }
+    .toast.fade-out { animation: fadeOutRight 0.3s forwards; }
+    @keyframes slideInRight { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOutRight { to { transform: translateX(120%); opacity: 0; } }
+
+    /* Barra Inferior */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); display: flex; justify-content: space-around; padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 90; border-top: 1px solid var(--border-color); }
+    .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--text-muted); font-weight: 700; cursor: pointer; transition: color 0.2s; }
+    .nav-item.active { color: var(--admin-color); }
+    .nav-item .ic { margin-bottom: 2px; }
+</style>
+</head>
+<body>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<div class="topbar">
+    <div class="logo-row"><img src="logo_fixio.png" alt="logo" onerror="this.style.display='none'"></div>
+    <div class="greeting">Centro de Control <span class="admin-badge">Admin</span></div>
+    <div class="actions">
+        <button class="icon-btn" onclick="alternarTema()" title="Cambiar tema">
+            <i data-lucide="moon" id="themeIcon" style="width: 18px; height: 18px;"></i>
+        </button>
+        <button class="icon-btn" onclick="cerrarSesion()" title="Cerrar sesión">
+            <i data-lucide="log-out" style="width: 18px; height: 18px; color: var(--danger);"></i>
+        </button>
+    </div>
+</div>
+
+<!-- ===================== DASHBOARD ===================== -->
+<div class="container app-view active" id="view-dashboard">
+    <div class="section-title">
+        Resumen del Sistema
+        <button class="icon-btn" style="width:32px; height:32px;" onclick="loadDashboard()"><i data-lucide="refresh-cw" style="width:16px;"></i></button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card highlight-card">
+            <div class="stat-icon"><i data-lucide="dollar-sign"></i></div>
+            <div class="stat-value" id="statIngresos">$0</div>
+            <div class="stat-label">Ingresos Completados</div>
+            <div class="stat-sub" id="statIngresosBs"></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i data-lucide="landmark"></i></div>
+            <div class="stat-value" id="statTasaBcv" style="font-size: 1.2rem;">--</div>
+            <div class="stat-label">Tasa BCV (Bs/USD)</div>
+            <div class="stat-sub" id="statTasaFecha"></div>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon"><i data-lucide="users"></i></div>
+            <div class="stat-value" id="statClientes">0</div>
+            <div class="stat-label">Clientes</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i data-lucide="briefcase"></i></div>
+            <div class="stat-value" id="statTrabajadores">0</div>
+            <div class="stat-label">Trabajadores</div>
+            <div class="stat-sub" id="statVerifPend"></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i data-lucide="layers"></i></div>
+            <div class="stat-value" id="statCategorias">0</div>
+            <div class="stat-label">Categorías</div>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon" style="color: #b45309;"><i data-lucide="search"></i></div>
+            <div class="stat-value" id="statBuscando">0</div>
+            <div class="stat-label">Buscando</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="color: #1e40af;"><i data-lucide="loader"></i></div>
+            <div class="stat-value" id="statEnCurso">0</div>
+            <div class="stat-label">En Curso</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="color: var(--success-text);"><i data-lucide="check-circle"></i></div>
+            <div class="stat-value" id="statCompletadas">0</div>
+            <div class="stat-label">Completadas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="color: var(--danger-text);"><i data-lucide="x-circle"></i></div>
+            <div class="stat-value" id="statCanceladas">0</div>
+            <div class="stat-label">Canceladas</div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== USUARIOS ===================== -->
+<div class="container app-view" id="view-usuarios">
+    <div class="section-title">
+        Directorio de Usuarios
+        <button class="icon-btn" style="width:32px; height:32px;" onclick="loadUsuarios()"><i data-lucide="refresh-cw" style="width:16px;"></i></button>
+    </div>
+    <div class="search-row">
+        <input type="text" class="search-input" id="buscadorUsuarios" placeholder="Buscar por nombre o correo..." oninput="renderUsuarios()">
+        <button class="filter-chip active" data-rol="todos" onclick="filtrarRol(this)">Todos</button>
+        <button class="filter-chip" data-rol="cliente" onclick="filtrarRol(this)">Clientes</button>
+        <button class="filter-chip" data-rol="trabajador" onclick="filtrarRol(this)">Trabajadores</button>
+    </div>
+    <div class="data-list" id="usuariosList">
+        <div class="empty-state"><i data-lucide="loader"></i> Cargando usuarios...</div>
+    </div>
+</div>
+
+<!-- ===================== SOLICITUDES ===================== -->
+<div class="container app-view" id="view-solicitudes">
+    <div class="section-title">
+        Solicitudes de Servicio
+        <button class="icon-btn" style="width:32px; height:32px;" onclick="loadSolicitudes()"><i data-lucide="refresh-cw" style="width:16px;"></i></button>
+    </div>
+    <div class="data-list" id="solicitudesList">
+        <div class="empty-state"><i data-lucide="loader"></i> Cargando solicitudes...</div>
+    </div>
+</div>
+
+<!-- ===================== CATEGORÍAS ===================== -->
+<div class="container app-view" id="view-categorias">
+    <div class="section-title">
+        Catálogo de Servicios
+        <button class="btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="abrirModalNuevaCategoria()">
+            <i data-lucide="plus" style="width: 14px;"></i> Agregar
+        </button>
+    </div>
+    <div class="data-list" id="categoriasList">
+        <div class="empty-state"><i data-lucide="loader"></i> Cargando catálogo...</div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="appModal">
+    <div class="modal-content" id="modalBody"></div>
+</div>
+
+<div class="bottom-nav">
+    <div class="nav-item active" data-target="view-dashboard"><div class="ic"><i data-lucide="pie-chart" style="width: 20px; height: 20px;"></i></div>Dashboard</div>
+    <div class="nav-item" data-target="view-usuarios"><div class="ic"><i data-lucide="users" style="width: 20px; height: 20px;"></i></div>Usuarios</div>
+    <div class="nav-item" data-target="view-solicitudes"><div class="ic"><i data-lucide="clipboard-list" style="width: 20px; height: 20px;"></i></div>Solicitudes</div>
+    <div class="nav-item" data-target="view-categorias"><div class="ic"><i data-lucide="layers" style="width: 20px; height: 20px;"></i></div>Categorías</div>
+</div>
+
+<script>
+    lucide.createIcons();
+
+    const API_URL = 'http://localhost:5500/api';
+    const token = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
+    const rol = localStorage.getItem('userRol') || sessionStorage.getItem('userRol');
+
+    // SEGURIDAD (2da capa): expulsar si no es administrador.
+    // Nota: aunque alguien fuerce esta página, TODOS los endpoints /api/admin/*
+    // exigen un token JWT con rol 'admin' en el servidor, así que sin credenciales
+    // reales el panel queda vacío y redirige de inmediato.
+    if (!token || rol !== 'admin') {
+        localStorage.clear(); sessionStorage.clear(); window.location.replace('index.html');
+    }
+
+    let tasaBCV = null;
+    let usuariosCache = [];
+    let trabajadoresInfo = {}; // id -> { verificado, calificacion, total_servicios }
+    let filtroRolActual = 'todos';
+
+    // --- TEMA ---
+    function aplicarIconoTema() {
+        const tema = document.documentElement.getAttribute('data-theme') || 'light';
+        const icono = document.getElementById('themeIcon');
+        if (icono) icono.setAttribute('data-lucide', tema === 'dark' ? 'sun' : 'moon');
+        lucide.createIcons();
+    }
+    window.alternarTema = function() {
+        const nuevo = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', nuevo);
+        localStorage.setItem('themePreference', nuevo);
+        aplicarIconoTema();
+    };
+    aplicarIconoTema();
+
+    // --- TOASTS ---
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icon = type === 'success' ? 'check-circle' : 'alert-circle';
+        toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? '#15803d' : '#b91c1c'}"></i> <span>${message}</span>`;
+        container.appendChild(toast);
+        lucide.createIcons();
+        setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    async function apiFetch(endpoint, options = {}) {
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) };
+        const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+        if (response.status === 401 || response.status === 403) {
+            localStorage.clear(); sessionStorage.clear(); window.location.replace('index.html');
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'Error en la conexión');
+        return data;
+    }
+
+    function cerrarSesion() {
+        if(confirm("¿Cerrar el panel de administración?")) {
+            showToast("Cerrando sesión segura...", "success");
+            setTimeout(() => { localStorage.clear(); sessionStorage.clear(); window.location.href = 'index.html'; }, 800);
+        }
+    }
+
+    // --- NAVEGACIÓN ---
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+            item.classList.add('active');
+            document.getElementById(item.getAttribute('data-target')).classList.add('active');
+
+            const target = item.getAttribute('data-target');
+            if (target === 'view-dashboard') loadDashboard();
+            if (target === 'view-usuarios') loadUsuarios();
+            if (target === 'view-solicitudes') loadSolicitudes();
+            if (target === 'view-categorias') loadCategorias();
+        });
+    });
+
+    // --- TASA BCV ---
+    function formatearBs(montoUsd) {
+        if (!tasaBCV || isNaN(parseFloat(montoUsd))) return '';
+        return 'Bs ' + (parseFloat(montoUsd) * tasaBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    async function cargarTasaBCV() {
+        try {
+            const res = await fetch(`${API_URL}/tasa-bcv`);
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            tasaBCV = parseFloat(data.tasa);
+            document.getElementById('statTasaBcv').innerText = tasaBCV.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (data.fecha) {
+                const f = new Date(data.fecha);
+                document.getElementById('statTasaFecha').innerText = isNaN(f) ? String(data.fecha) : 'Actualizada: ' + f.toLocaleDateString('es-ES');
+            }
+        } catch (e) {
+            document.getElementById('statTasaBcv').innerText = 'N/D';
+            document.getElementById('statTasaFecha').innerText = 'Sin conexión con la fuente';
+        }
+    }
+
+    // --- DASHBOARD ---
+    async function loadDashboard() {
+        try {
+            await cargarTasaBCV();
+            const s = await apiFetch('/admin/stats');
+            document.getElementById('statClientes').innerText = s.clientes;
+            document.getElementById('statTrabajadores').innerText = s.trabajadores;
+            document.getElementById('statCategorias').innerText = s.categorias;
+            document.getElementById('statBuscando').innerText = s.solicitudes_buscando;
+            document.getElementById('statEnCurso').innerText = s.solicitudes_en_curso;
+            document.getElementById('statCompletadas').innerText = s.solicitudes_completadas;
+            document.getElementById('statCanceladas').innerText = s.solicitudes_canceladas;
+            document.getElementById('statIngresos').innerText = '$' + s.ingresos_completados.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const bs = formatearBs(s.ingresos_completados);
+            document.getElementById('statIngresosBs').innerText = bs ? `≈ ${bs}` : '';
+            document.getElementById('statVerifPend').innerText = s.verificaciones_pendientes > 0 ? `${s.verificaciones_pendientes} por verificar` : 'Todos verificados';
+        } catch (error) {
+            console.error("Error cargando dashboard:", error);
+        }
+    }
+
+    // --- USUARIOS ---
+    window.filtrarRol = function(chip) {
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        filtroRolActual = chip.getAttribute('data-rol');
+        renderUsuarios();
+    };
+
+    async function loadUsuarios() {
+        const list = document.getElementById('usuariosList');
+        list.innerHTML = '<div class="empty-state"><i data-lucide="loader"></i> Obteniendo registros...</div>';
+        try {
+            const [usuarios, trabajadores] = await Promise.all([
+                apiFetch('/admin/usuarios'),
+                apiFetch('/admin/trabajadores')
+            ]);
+            usuariosCache = usuarios;
+            trabajadoresInfo = {};
+            trabajadores.forEach(t => { trabajadoresInfo[t.id] = t; });
+            renderUsuarios();
+        } catch (error) {
+            list.innerHTML = '<div class="empty-state">Error al cargar la lista de usuarios.</div>';
+        }
+    }
+
+    window.renderUsuarios = function() {
+        const list = document.getElementById('usuariosList');
+        const q = (document.getElementById('buscadorUsuarios').value || '').toLowerCase();
+
+        let filtrados = usuariosCache.filter(u => {
+            const coincideTexto = `${u.nombre} ${u.apellido} ${u.email}`.toLowerCase().includes(q);
+            const coincideRol = filtroRolActual === 'todos' || u.rol === filtroRolActual;
+            return coincideTexto && coincideRol;
+        });
+
+        if (filtrados.length === 0) {
+            list.innerHTML = '<div class="empty-state">No se encontraron usuarios con ese criterio.</div>';
+            lucide.createIcons(); return;
+        }
+
+        let html = '';
+        filtrados.forEach(u => {
+            const inicial = u.nombre.charAt(0).toUpperCase();
+            const info = trabajadoresInfo[u.id];
+
+            let verifTag = '';
+            let extraMeta = '';
+            if (u.rol === 'trabajador') {
+                const verificado = info && (info.verificado === 1 || info.verificado === true);
+                verifTag = verificado
+                    ? '<span class="role-tag tag-verificado">✓ Verificado</span>'
+                    : '<span class="role-tag tag-noverificado">Sin verificar</span>';
+                if (info) extraMeta = `<span>⭐ ${info.calificacion_promedio || '0.00'} · ${info.total_servicios || 0} servicios</span>`;
+            }
+
+            let actionBtns = '';
+            if (u.rol === 'trabajador' && info && !(info.verificado === 1 || info.verificado === true)) {
+                actionBtns += `<button class="btn-action btn-verify" title="Verificar Trabajador" onclick="verificarTrabajador(${u.id}, '${u.nombre}')"><i data-lucide="badge-check" style="width:16px;"></i></button>`;
+            }
+            if (u.estado === 'activo' && u.rol !== 'admin') {
+                actionBtns += `<button class="btn-action btn-suspend" title="Suspender Usuario" onclick="suspenderUsuario(${u.id}, '${u.nombre}')"><i data-lucide="ban" style="width:16px;"></i></button>`;
+            } else if (u.estado === 'suspendido') {
+                actionBtns += `<button class="btn-action btn-verify" title="Reactivar Usuario" onclick="reactivarUsuario(${u.id}, '${u.nombre}')"><i data-lucide="rotate-ccw" style="width:16px;"></i></button>`;
+            }
+
+            html += `
+            <div class="data-card">
+                <div class="data-info">
+                    <div class="data-icon">${inicial}</div>
+                    <div>
+                        <div class="data-title">${u.nombre} ${u.apellido} <span class="role-tag tag-${u.rol}">${u.rol}</span> ${verifTag}</div>
+                        <div class="data-meta">
+                            <span>${u.email}</span>
+                            <span><span class="status-dot status-${u.estado}"></span>${u.estado}</span>
+                            ${extraMeta}
+                        </div>
+                    </div>
+                </div>
+                <div class="action-group">${actionBtns}</div>
+            </div>`;
+        });
+        list.innerHTML = html;
+        lucide.createIcons();
+    };
+
+    window.verificarTrabajador = async function(id, nombre) {
+        if (!confirm(`¿Marcar a ${nombre} como trabajador VERIFICADO?`)) return;
+        try {
+            await apiFetch(`/admin/trabajador/${id}/verificar`, { method: 'PUT' });
+            showToast(`${nombre} verificado con éxito.`, 'success');
+            loadUsuarios();
+        } catch (error) { showToast(error.message, 'error'); }
+    };
+
+    window.suspenderUsuario = async function(id, nombre) {
+        if (!confirm(`¿Estás seguro de que deseas SUSPENDER el acceso a ${nombre}?`)) return;
+        try {
+            await apiFetch(`/admin/usuarios/${id}/suspender`, { method: 'PUT' });
+            showToast(`Usuario ${nombre} suspendido exitosamente.`, 'success');
+            loadUsuarios();
+        } catch (error) { showToast(error.message, 'error'); }
+    };
+
+    window.reactivarUsuario = async function(id, nombre) {
+        if (!confirm(`¿Reactivar el acceso a ${nombre}?`)) return;
+        try {
+            await apiFetch(`/admin/usuarios/${id}/reactivar`, { method: 'PUT' });
+            showToast(`Usuario ${nombre} reactivado.`, 'success');
+            loadUsuarios();
+        } catch (error) { showToast(error.message, 'error'); }
+    };
+
+    // --- SOLICITUDES ---
+    function formatearEstado(estado) {
+        const estados = { 'buscando': 'Buscando', 'asignado': 'Asignado', 'en_camino': 'En Camino', 'en_proceso': 'En Proceso', 'completado': 'Completado', 'cancelado': 'Cancelado' };
+        return estados[estado] || estado;
+    }
+
+    async function loadSolicitudes() {
+        const list = document.getElementById('solicitudesList');
+        list.innerHTML = '<div class="empty-state"><i data-lucide="loader"></i> Cargando solicitudes...</div>';
+        try {
+            const solicitudes = await apiFetch('/admin/solicitudes');
+            if (solicitudes.length === 0) {
+                list.innerHTML = '<div class="empty-state">Aún no hay solicitudes registradas.</div>';
+                lucide.createIcons(); return;
+            }
+            let html = '';
+            solicitudes.forEach(s => {
+                const fecha = new Date(s.fecha_creacion).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+                const monto = s.costo_final || s.costo_estimado;
+                const bs = monto ? formatearBs(monto) : '';
+                const trabajador = s.trabajador_nombre ? `${s.trabajador_nombre} ${s.trabajador_apellido || ''}` : 'Sin asignar';
+                html += `
+                <div class="data-card">
+                    <div class="data-info">
+                        <div class="data-icon" style="background: var(--surface-soft); color: var(--admin-color); font-size: 0.8rem;">#${s.id}</div>
+                        <div>
+                            <div class="data-title">${s.categoria_nombre} <span class="estado-chip estado-${s.estado}">${formatearEstado(s.estado)}</span></div>
+                            <div class="data-meta">
+                                <span>👤 ${s.cliente_nombre} ${s.cliente_apellido || ''}</span>
+                                <span>🛠️ ${trabajador}</span>
+                                <span>📅 ${fecha}</span>
+                                ${monto ? `<span style="font-weight:800; color: var(--success-text);">$${monto}${bs ? ` (≈ ${bs})` : ''}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+            lucide.createIcons();
+        } catch (error) {
+            list.innerHTML = '<div class="empty-state">Error al cargar solicitudes.</div>';
+        }
+    }
+
+    // --- CATEGORÍAS ---
+    async function loadCategorias() {
+        const list = document.getElementById('categoriasList');
+        list.innerHTML = '<div class="empty-state"><i data-lucide="loader"></i> Leyendo catálogo...</div>';
+        try {
+            const categorias = await apiFetch('/categorias');
+            if (categorias.length === 0) {
+                list.innerHTML = '<div class="empty-state">El catálogo está vacío. Agrega una categoría.</div>';
+                return;
+            }
+            let html = '';
+            categorias.forEach(c => {
+                html += `
+                <div class="data-card">
+                    <div class="data-info">
+                        <div class="data-icon" style="background: var(--surface-soft); color: var(--admin-color);">
+                            <i data-lucide="${c.icono || 'wrench'}"></i>
+                        </div>
+                        <div>
+                            <div class="data-title">${c.nombre}</div>
+                            <div class="data-meta">${c.descripcion || 'Sin descripción detallada'}</div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+            lucide.createIcons();
+        } catch (error) {
+            list.innerHTML = '<div class="empty-state">Error al cargar el catálogo de categorías.</div>';
+        }
+    }
+
+    // --- MODALES ---
+    function openModal(htmlContent) {
+        document.getElementById('modalBody').innerHTML = htmlContent;
+        document.getElementById('appModal').style.display = 'flex';
+        lucide.createIcons();
+    }
+    window.closeModal = function() { document.getElementById('appModal').style.display = 'none'; };
+
+    window.abrirModalNuevaCategoria = function() {
+        const html = `
+            <h3 style="margin-bottom: 15px; font-weight: 800; color: var(--admin-color);">Añadir Nueva Categoría</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Crea una nueva línea de servicio para que los trabajadores puedan ofertarla.</p>
+
+            <div class="form-group">
+                <label>Nombre del Servicio *</label>
+                <input type="text" id="catNombre" class="form-input" placeholder="Ej. Herrería, Computación...">
+            </div>
+            <div class="form-group">
+                <label>Identificador del Icono (Lucide)</label>
+                <input type="text" id="catIcono" class="form-input" placeholder="Ej. hammer, monitor, wifi">
+            </div>
+            <div class="form-group">
+                <label>Descripción corta</label>
+                <input type="text" id="catDesc" class="form-input" placeholder="Detalla de qué trata este servicio">
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-secondary" style="flex: 1;" onclick="closeModal()">Cancelar</button>
+                <button class="btn-primary" style="flex: 1;" onclick="guardarNuevaCategoria()">Guardar</button>
+            </div>
+        `;
+        openModal(html);
+    };
+
+    window.guardarNuevaCategoria = async function() {
+        const nombre = document.getElementById('catNombre').value.trim();
+        const icono = document.getElementById('catIcono').value.trim();
+        const descripcion = document.getElementById('catDesc').value.trim();
+
+        if (!nombre) return showToast("El nombre de la categoría es obligatorio.", "error");
+
+        try {
+            await apiFetch('/admin/categorias', {
+                method: 'POST',
+                body: JSON.stringify({ nombre, icono, descripcion })
+            });
+            showToast(`Categoría "${nombre}" agregada al sistema.`, 'success');
+            closeModal();
+            loadCategorias();
+            loadDashboard();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    };
+
+    document.getElementById('appModal').addEventListener('click', function(e) { if(e.target === this) closeModal(); });
+
+    // Arrancar aplicación (la primera llamada admin valida el token contra el servidor:
+    // si alguien falsificó el rol en localStorage, recibirá 403 y será expulsado)
+    loadDashboard();
+</script>
+</body>
+</html>

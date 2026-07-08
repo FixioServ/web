@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0a3a61">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fixio - Panel Trabajador</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="/socket.io/socket.io.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    (function() {
+        const preferenciaSistema = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        const temaGuardado = localStorage.getItem('themePreference') || preferenciaSistema;
+        document.documentElement.setAttribute('data-theme', temaGuardado);
+    })();
+</script>
+<style>
+    :root {
+        --brand-blue: #0a3a61; --brand-blue-dark: #062741;
+        --brand-yellow: #e0a935; --brand-yellow-dark: #b8871f;
+        --brand-gradient: linear-gradient(135deg, #0a3a61 0%, #062741 100%);
+        --accent-gradient: linear-gradient(135deg, #e0a935 0%, #b8871f 100%);
+        --bg: #f5f7fb; --card-bg: #ffffff;
+        --text-dark: #1e293b; --text-muted: #64748b;
+        --border-color: rgba(0,0,0,0.07); --danger: #ef4444;
+        --surface-soft: #f1f5f9; --surface-softer: #f8fafc; --surface-card2: #fafbfc; --surface-hover: #e2e8f0;
+    }
+    html[data-theme="dark"] {
+        --brand-blue: #6ba3f5;
+        --brand-yellow-dark: #e0a935;
+        --bg: #0b1428; --card-bg: #141d33;
+        --text-dark: #e8eefc; --text-muted: #9fb0d0;
+        --border-color: rgba(255,255,255,0.10); --danger: #f87171;
+        --surface-soft: #1e2a47; --surface-softer: #182238; --surface-card2: #182238; --surface-hover: #253355;
+        color-scheme: dark;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text-dark); min-height: 100vh; padding-bottom: 80px; transition: background 0.3s ease; }
+
+
+    /* Indicador perenne de la tasa BCV (siempre visible en la barra superior) */
+    .bcv-top-pill { display: none; align-items: center; gap: 5px; background: var(--surface-soft); color: var(--brand-yellow-dark); border: 1px solid var(--border-color); border-radius: 20px; padding: 5px 10px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; cursor: default; }
+    .bcv-top-pill.visible { display: inline-flex; }
+    @media (max-width: 380px) { .bcv-top-pill { font-size: 0.65rem; padding: 4px 8px; } }
+
+
+    /* Badge de mensajes no leídos en la barra inferior */
+    .nav-item { position: relative; }
+    .badge-mensajes { position: absolute; top: -4px; right: 50%; margin-right: -22px; background: var(--danger); color: #fff; font-size: 0.62rem; font-weight: 800; min-width: 17px; height: 17px; border-radius: 10px; display: none; align-items: center; justify-content: center; padding: 0 4px; }
+    .badge-mensajes.visible { display: inline-flex; }
+
+    .theme-toggle-btn { background: var(--surface-soft); color: var(--brand-blue); border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+    .theme-toggle-btn:hover { background: var(--surface-hover); transform: rotate(15deg); }
+
+
+    /* MODO ACTIVO (interruptor estilo apps de servicio) */
+    .estado-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+    .estado-card.encendido { border-color: #22c55e; box-shadow: 0 0 0 1px rgba(34,197,94,0.25); }
+    #radioRow { display: none; }
+    .estado-card.encendido #radioRow { display: flex !important; }
+    .switch-activo { position: relative; display: inline-block; width: 54px; height: 30px; flex-shrink: 0; }
+    .switch-activo input { opacity: 0; width: 0; height: 0; }
+    .slider-activo { position: absolute; cursor: pointer; inset: 0; background: var(--surface-hover); border-radius: 30px; transition: 0.25s; }
+    .slider-activo:before { content: ""; position: absolute; height: 24px; width: 24px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.25s; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
+    .switch-activo input:checked + .slider-activo { background: #22c55e; }
+    .switch-activo input:checked + .slider-activo:before { transform: translateX(24px); }
+
+    /* NIVEL: Ruta del Relámpago */
+    .nivel-card { border-radius: 16px; padding: 18px; margin-bottom: 16px; color: #fff; position: relative; overflow: hidden; }
+    .nivel-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.68rem; font-weight: 800; padding: 3px 9px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .barra-progreso { height: 7px; background: rgba(255,255,255,0.25); border-radius: 6px; overflow: hidden; margin-top: 4px; }
+    .barra-progreso > div { height: 100%; background: #fff; border-radius: 6px; transition: width 0.4s; }
+
+    /* CHAT */
+    .chat-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: flex-end; justify-content: center; z-index: 150; backdrop-filter: blur(2px); }
+    .chat-overlay.active { display: flex; }
+    .chat-window { background: var(--card-bg); width: 100%; max-width: 480px; height: 78vh; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); border-bottom: none; }
+    @media (min-width: 720px) { .chat-overlay { align-items: center; } .chat-window { border-radius: 20px; height: 70vh; border-bottom: 1px solid var(--border-color); } }
+    .chat-header { padding: 14px 16px; background: var(--brand-gradient); color: #fff; display: flex; align-items: center; justify-content: space-between; }
+    .chat-header .chat-title { font-weight: 800; font-size: 0.95rem; }
+    .chat-header .chat-sub { font-size: 0.75rem; opacity: 0.85; font-weight: 600; }
+    .chat-close { background: rgba(255,255,255,0.15); border: none; color: #fff; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-softer); }
+    .chat-bubble { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 0.9rem; font-weight: 600; line-height: 1.4; word-wrap: break-word; }
+    .chat-bubble.mio { align-self: flex-end; background: var(--brand-yellow); color: #1e293b; border-bottom-right-radius: 4px; }
+    .chat-bubble.otro { align-self: flex-start; background: var(--card-bg); color: var(--text-dark); border: 1px solid var(--border-color); border-bottom-left-radius: 4px; }
+    .chat-bubble .chat-hora { display: block; font-size: 0.65rem; opacity: 0.7; margin-top: 4px; font-weight: 700; text-align: right; }
+    .chat-input-row { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border-color); background: var(--card-bg); }
+    .chat-input-row input { flex: 1; padding: 0.7rem 1rem; background: var(--surface-softer); border: 1px solid var(--border-color); border-radius: 24px; font-family: inherit; font-size: 0.9rem; outline: none; color: var(--text-dark); }
+    .chat-send-btn { background: var(--brand-yellow); color: #1e293b; border: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .chat-empty { text-align: center; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; margin: auto; }
+    .btn-chat-inline { background: var(--brand-blue); color: #fff; border: none; padding: 10px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px; flex: 1; }
+    html[data-theme="dark"] .btn-chat-inline { color: #0a1226; }
+    .precio-bs { font-size: 0.75rem; color: var(--text-muted); font-weight: 700; }
+
+    /* Barra Superior */
+    .topbar { background: var(--card-bg); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.04); position: sticky; top: 0; z-index: 10; border-bottom: 3px solid var(--brand-yellow); }
+    .topbar .logo-row { display: flex; align-items: center; gap: 10px; }
+    .topbar img { height: 34px; background: #fff; border-radius: 8px; padding: 2px 6px; }
+    .topbar .greeting { font-weight: 800; font-size: 0.95rem; }
+    .topbar .greeting span { color: var(--brand-yellow-dark); }
+    .icon-btn { background: var(--surface-soft); color: var(--text-dark); border: none; width: 38px; height: 38px; border-radius: 10px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size: 1.1rem; }
+
+    .app-view { display: none; animation: fadeIn 0.3s ease; }
+    .app-view.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .container { max-width: 720px; margin: 0 auto; padding: 18px; }
+    .section-title { font-size: 1rem; font-weight: 800; margin: 0 0 16px; color: var(--text-dark); display: flex; justify-content: space-between; align-items: center;}
+
+    /* Tarjetas */
+    .job-card { background: var(--card-bg); border-radius: 16px; padding: 18px; border: 1px solid var(--border-color); margin-bottom: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+    .job-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;}
+    .job-title { font-weight: 800; font-size: 1.05rem; color: var(--brand-blue); margin-bottom: 4px; }
+    .job-urgency { font-size: 0.72rem; font-weight: 800; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; }
+    .urgency-normal { background: var(--surface-soft); color: var(--text-muted); }
+    .urgency-hoy { background: #fff7e6; color: var(--brand-yellow-dark); }
+    .urgency-urgente { background: #fef2f2; color: #b91c1c; }
+    
+    .job-detail { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 8px; display: flex; gap: 8px; align-items: flex-start;}
+    .job-detail i { flex-shrink: 0; margin-top: 2px; }
+
+    .action-row { display: flex; gap: 10px; margin-top: 16px; }
+    .btn-primary { flex: 1; background: var(--accent-gradient); color: #1e293b; border: none; padding: 10px; border-radius: 8px; font-weight: 800; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(224,169,53,0.25); display: flex; justify-content: center; align-items: center; gap: 6px;}
+    .btn-secondary { flex: 1; background: var(--surface-soft); color: var(--text-dark); border: none; padding: 10px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px;}
+    .btn-success { flex: 1; background: #15803d; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px;}
+
+    /* Controles de estado */
+    .status-badge { font-size: 0.8rem; font-weight: 800; padding: 6px 12px; border-radius: 20px; text-align: center; margin-bottom: 12px; display: inline-block;}
+    .status-asignado { background: #dbeafe; color: #1e3a8a; }
+    .status-encamino { background: #fef3c7; color: #92400e; }
+    .status-enproceso { background: #e0e7ff; color: #3730a3; }
+    .status-completado { background: #dcfce7; color: #166534; }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.95rem; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 12px;}
+
+    /* Perfil */
+    .profile-header { background: var(--card-bg); border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 16px; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+    .profile-avatar-wrapper { position: relative; width: 80px; height: 80px; margin: 0 auto 16px; cursor: pointer; }
+    .profile-avatar-big { width: 100%; height: 100%; border-radius: 50%; background: var(--brand-yellow); color: #1e293b; font-size: 2rem; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(224,169,53,0.2); overflow: hidden; object-fit: cover;}
+    .avatar-upload-overlay { position: absolute; bottom: 0; right: 0; background: var(--brand-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border: 2px solid white; }
+    .profile-name { font-size: 1.3rem; font-weight: 800; color: var(--text-dark); margin-bottom: 4px; }
+    .profile-email { font-size: 0.9rem; color: var(--text-muted); font-weight: 500; margin-bottom: 16px; text-transform: capitalize; }
+    
+    .profile-stats-row { display: flex; justify-content: center; gap: 30px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+    .stat-item { display: flex; flex-direction: column; align-items: center; }
+    .stat-value { font-size: 1.2rem; font-weight: 800; color: var(--text-dark); }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;}
+
+    .profile-menu { background: var(--card-bg); border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.02); margin-bottom: 16px; }
+    .menu-item { display: flex; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background 0.2s; color: var(--text-dark); }
+    .menu-item:last-child { border-bottom: none; }
+    .menu-item:hover { background: var(--surface-softer); }
+    .menu-icon { margin-right: 16px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+    .menu-text { flex: 1; font-weight: 600; font-size: 0.95rem; }
+    .menu-arrow { color: #cbd5e1; }
+    .menu-item.danger { color: var(--danger); }
+    .menu-item.danger .menu-icon { color: var(--danger); }
+
+    /* Modales y Formularios */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(2px); opacity: 0; animation: fadeInModal 0.2s forwards; }
+    .modal-content { background: var(--card-bg); width: 90%; max-width: 400px; border-radius: 16px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transform: translateY(20px); animation: slideUpModal 0.2s forwards; }
+    .form-group { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+    .form-input { width: 100%; padding: 0.7rem 1rem; background: var(--surface-softer); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.92rem; font-family: inherit; outline: none; }
+    @keyframes fadeInModal { to { opacity: 1; } }
+    @keyframes slideUpModal { to { transform: translateY(0); } }
+
+    /* SISTEMA DE TOASTS (NUEVO) */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast { background: var(--card-bg); border-radius: 8px; padding: 14px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 12px; animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; font-weight: 700; font-size: 0.9rem; color: var(--text-dark); border-left: 5px solid transparent; }
+    .toast.success { border-left-color: #15803d; }
+    .toast.error { border-left-color: #b91c1c; }
+    .toast.fade-out { animation: fadeOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes slideInRight { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOutRight { to { transform: translateX(120%); opacity: 0; } }
+
+    /* Barra Inferior */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); display: flex; justify-content: space-around; padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 10; border-top: 1px solid var(--border-color); }
+    .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--text-muted); font-weight: 700; cursor: pointer; transition: color 0.2s; }
+    .nav-item.active { color: var(--brand-yellow-dark); }
+    .nav-item .ic { margin-bottom: 2px; }
+</style>
+</head>
+<body>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<div class="topbar">
+    <div class="logo-row"><img src="logo_fixio.png" alt="logo" onerror="this.style.display='none'"></div>
+    <div class="greeting">Hola, <span id="userName">...</span></div>
+    <div class="bcv-top-pill" id="bcvTopPill" title="Tasa referencial del Banco Central de Venezuela"><i data-lucide="landmark" style="width:14px; height:14px; vertical-align:-2px;"></i> <span id="bcvTopTexto">BCV --</span></div>
+    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="alternarTema()" title="Cambiar tema" style="margin-left: 10px; margin-right: 8px;">
+        <i data-lucide="moon" id="themeIcon" style="width: 18px; height: 18px;"></i>
+    </button>
+    <button class="icon-btn" onclick="document.querySelector('[data-target=\'view-perfil\']').click()">
+        <i data-lucide="user" style="width: 18px; height: 18px;"></i>
+    </button>
+</div>
+
+<div class="container app-view active" id="view-explorar">
+
+    <!-- MODO ACTIVO: interruptor de disponibilidad + radio de trabajo -->
+    <div class="estado-card" id="estadoCard">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div style="min-width:0;">
+                <div id="estadoTitulo" style="font-weight:800; font-size:1rem; color:var(--text-dark);">Estás fuera de línea</div>
+                <div id="estadoSub" style="font-size:0.78rem; color:var(--text-muted); font-weight:600;">Actívate para ver y recibir trabajos de tu zona.</div>
+            </div>
+            <label class="switch-activo">
+                <input type="checkbox" id="switchDisponible" onchange="cambiarDisponibilidad(this.checked)">
+                <span class="slider-activo"></span>
+            </label>
+        </div>
+        <div id="radioRow" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-color); align-items:center; gap:10px;">
+            <i data-lucide="radar" style="width:16px; height:16px; color:var(--brand-blue); flex-shrink:0;"></i>
+            <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">Radio de trabajo:</span>
+            <select id="radioTrabajo" class="form-input" style="width:auto; padding:6px 10px; font-size:0.85rem;" onchange="cambiarRadio(this.value)">
+                <option value="5">5 km</option>
+                <option value="10" selected>10 km</option>
+                <option value="20">20 km</option>
+                <option value="50">50 km</option>
+                <option value="100">100 km</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="section-title">
+        Trabajos Disponibles
+        <button class="icon-btn" style="width:30px; height:30px;" onclick="loadAvailableJobs()"><i data-lucide="refresh-cw" style="width:16px;"></i></button>
+    </div>
+    <div id="availableJobsList">
+        <div class="empty-state"><i data-lucide="search" style="width: 40px; height: 40px; opacity: 0.5;"></i>Buscando solicitudes en tu área...</div>
+    </div>
+</div>
+
+<div class="container app-view" id="view-activos">
+    <div class="section-title">Mis Trabajos Activos</div>
+    <div id="activeJobsList"></div>
+</div>
+
+<div class="container app-view" id="view-mensajes">
+    <div class="section-title">Bandeja de Mensajes</div>
+    <div id="mensajesLista">
+        <div class="empty-state"><i data-lucide="message-square" style="width: 40px; height: 40px; opacity: 0.5;"></i>Cargando conversaciones...</div>
+    </div>
+</div>
+
+<div class="container app-view" id="view-historial">
+    <div class="section-title">Historial Completado</div>
+    <div id="historialList"></div>
+</div>
+
+<div class="container app-view" id="view-perfil">
+    <div class="profile-header">
+        
+        <div class="profile-avatar-wrapper" onclick="document.getElementById('avatarInput').click()">
+            <div class="profile-avatar-big" id="profileAvatarInitials">--</div>
+            <div class="avatar-upload-overlay"><i data-lucide="camera" style="width: 14px; height: 14px;"></i></div>
+            <input type="file" id="avatarInput" accept="image/*" style="display: none;" onchange="subirAvatar(event)">
+        </div>
+
+        <div class="profile-name" id="profileFullName">Cargando...</div>
+        <div class="profile-email" id="profileOficio">...</div>
+        
+        <div class="profile-stats-row">
+            <div class="stat-item"><span class="stat-value" id="profileTotalServices">0</span><span class="stat-label">Completados</span></div>
+            <div class="stat-item"><span class="stat-value" style="color: var(--brand-yellow-dark);"><span id="profileRating">5.0</span> <i data-lucide="star" style="width:14px; fill:currentColor; vertical-align:middle;"></i></span><span class="stat-label">Calificación</span></div>
+        </div>
+    </div>
+
+    <div id="nivelCard"></div>
+
+    <div class="profile-menu">
+        <div class="menu-item" onclick="abrirModalVerificacion()"><div class="menu-icon" style="color: #22c55e;"><i data-lucide="badge-check"></i></div><div class="menu-text">Verificación de identidad <span id="verifBadge" style="display:none; font-size:0.65rem; font-weight:800; padding:2px 8px; border-radius:10px; margin-left:6px;"></span></div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+        <div class="menu-item" onclick="abrirModalComisiones()"><div class="menu-icon" style="color: var(--brand-yellow-dark);"><i data-lucide="wallet"></i></div><div class="menu-text">Wallet Fixio <span id="deudaBadge" style="display:none; background: var(--danger); color:#fff; font-size:0.65rem; font-weight:800; padding:2px 8px; border-radius:10px; margin-left:6px;"></span></div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+        <div class="menu-item" onclick="abrirModalEditarPerfil()"><div class="menu-icon"><i data-lucide="user-cog"></i></div><div class="menu-text">Editar cuenta</div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+        <div class="menu-item" onclick="abrirModalEspecialidades()"><div class="menu-icon"><i data-lucide="award"></i></div><div class="menu-text">Mis Especialidades</div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+        <div class="menu-item" onclick="abrirModalSoporte()"><div class="menu-icon"><i data-lucide="help-circle"></i></div><div class="menu-text">Soporte y Ayuda</div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+    </div>
+
+    <div class="profile-menu">
+        <div class="menu-item danger" onclick="cerrarSesion()"><div class="menu-icon"><i data-lucide="log-out"></i></div><div class="menu-text">Cerrar Sesión</div></div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="appModal">
+    <div class="modal-content" id="modalBody"></div>
+</div>
+
+<!-- CHAT EN VIVO TRABAJADOR <-> CLIENTE -->
+<div class="chat-overlay" id="chatOverlay">
+    <div class="chat-window">
+        <div class="chat-header">
+            <div>
+                <div class="chat-title" id="chatTitulo">Chat</div>
+                <div class="chat-sub" id="chatSubtitulo">Conversación del servicio</div>
+            </div>
+            <button class="chat-close" onclick="cerrarChat()"><i data-lucide="x" style="width:18px;"></i></button>
+        </div>
+        <div class="chat-messages" id="chatMensajes">
+            <div class="chat-empty">Cargando conversación...</div>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" id="chatInput" placeholder="Escribe un mensaje..." maxlength="1000" onkeydown="if(event.key==='Enter') enviarMensajeChat()">
+            <button class="chat-send-btn" onclick="enviarMensajeChat()"><i data-lucide="send" style="width:18px;"></i></button>
+        </div>
+    </div>
+</div>
+
+<div class="bottom-nav">
+    <div class="nav-item active" data-target="view-explorar"><div class="ic"><i data-lucide="search" style="width: 20px; height: 20px;"></i></div>Explorar</div>
+    <div class="nav-item" data-target="view-activos"><div class="ic"><i data-lucide="briefcase" style="width: 20px; height: 20px;"></i></div>Activos</div>
+    <div class="nav-item" data-target="view-mensajes"><div class="ic"><i data-lucide="message-square" style="width: 20px; height: 20px;"></i></div>Mensajes<span class="badge-mensajes" id="badgeMensajes"></span></div>
+    <div class="nav-item" data-target="view-historial"><div class="ic"><i data-lucide="check-circle" style="width: 20px; height: 20px;"></i></div>Historial</div>
+    <div class="nav-item" data-target="view-perfil"><div class="ic"><i data-lucide="user" style="width: 20px; height: 20px;"></i></div>Perfil</div>
+</div>
+
+<script>
+    lucide.createIcons();
+
+    const API_URL = '/api'  // Ruta relativa: funciona en localhost y en producción;
+    const token = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
+    const rol = localStorage.getItem('userRol') || sessionStorage.getItem('userRol');
+    let currentProfileData = {};
+
+    if (!token || rol !== 'trabajador') { 
+        localStorage.clear(); sessionStorage.clear(); window.location.href = 'index.html'; 
+    }
+
+    let selectedJobId = null;
+    let tasaBCV = null;
+
+    // --- MODO OSCURO / CLARO ---
+    function aplicarIconoTema() {
+        const tema = document.documentElement.getAttribute('data-theme') || 'light';
+        const icono = document.getElementById('themeIcon');
+        if (icono) icono.setAttribute('data-lucide', tema === 'dark' ? 'sun' : 'moon');
+        lucide.createIcons();
+    }
+    window.alternarTema = function() {
+        const actual = document.documentElement.getAttribute('data-theme') || 'light';
+        const nuevo = actual === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', nuevo);
+        localStorage.setItem('themePreference', nuevo);
+        aplicarIconoTema();
+    };
+    aplicarIconoTema();
+
+    // --- TASA BCV ---
+    function formatearBs(montoUsd) {
+        if (!tasaBCV || isNaN(parseFloat(montoUsd))) return '';
+        const bs = parseFloat(montoUsd) * tasaBCV;
+        return 'Bs ' + bs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    async function cargarTasaBCV() {
+        try {
+            const res = await fetch(`${API_URL}/tasa-bcv`);
+            if (res.ok) {
+                const data = await res.json();
+                tasaBCV = parseFloat(data.tasa);
+                const p = document.getElementById('bcvTopPill');
+                document.getElementById('bcvTopTexto').innerText = 'BCV ' + tasaBCV.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2});
+                p.classList.add('visible');
+                showToast(`Tasa BCV de hoy: Bs ${tasaBCV.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})} por USD`, 'success');
+            }
+        } catch (e) {}
+    }
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icon = type === 'success' ? 'check-circle' : 'alert-circle';
+        toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? '#15803d' : '#b91c1c'}"></i> <span>${message}</span>`;
+        container.appendChild(toast);
+        lucide.createIcons();
+        setTimeout(() => { toast.classList.add('fade-out'); setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    async function apiFetch(endpoint, options = {}) {
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) };
+        const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+        if (response.status === 401) {
+            // Sesión inválida o expirada: salir limpiamente
+            localStorage.clear(); sessionStorage.clear();
+            window.location.href = 'index.html';
+            return new Promise(() => {}); // detener el flujo, ya estamos redirigiendo
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'Error en la conexión');
+        return data;
+    }
+
+    function cerrarSesion() {
+        showToast("Cerrando sesión...", "success");
+        setTimeout(() => { localStorage.clear(); sessionStorage.clear(); window.location.href = 'index.html'; }, 1000);
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+            item.classList.add('active');
+            document.getElementById(item.getAttribute('data-target')).classList.add('active');
+            
+            const target = item.getAttribute('data-target');
+            if (target === 'view-explorar') loadAvailableJobs();
+            if (target === 'view-activos') loadActiveJobs();
+            if (target === 'view-mensajes') cargarBandejaMensajes();
+            if (target === 'view-historial') loadHistory();
+            if (target === 'view-perfil') loadProfile();
+        });
+    });
+
+    // Bandeja de mensajes: una conversación por cada trabajo activo
+    async function cargarBandejaMensajes() {
+        const cont = document.getElementById('mensajesLista');
+        const vacio = `
+            <div class="empty-state" style="padding-top: 40px;">
+                <i data-lucide="message-square" style="width: 44px; height: 44px; opacity: 0.5;"></i>
+                <h3 style="font-size: 1.05rem; color: var(--text-dark); margin: 8px 0 4px;">No tienes conversaciones activas</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">El chat con cada cliente se abre en cuanto tu oferta es aceptada.</p>
+            </div>`;
+        try {
+            const activos = await apiFetch('/trabajador/activos');
+            if (activos.length === 0) { cont.innerHTML = vacio; lucide.createIcons(); return; }
+
+            cont.innerHTML = activos.map(job => {
+                const nombre = `${job.cliente_nombre} ${job.cliente_apellido || ''}`.trim();
+                return `
+                <div class="job-card" style="cursor:pointer; display:flex; align-items:center; gap:14px;"
+                     onclick="abrirChat(${job.id}, '${nombre.replace(/'/g, '')}', '${job.categoria_nombre.replace(/'/g, '')}')">
+                    <div style="width:44px; height:44px; border-radius:50%; background: var(--brand-gradient); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem; flex-shrink:0;">
+                        ${nombre.charAt(0).toUpperCase()}
+                    </div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:800; color:var(--text-dark);">${nombre}</div>
+                        <div style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">${job.categoria_nombre} · ${formatearEstado(job.estado)}</div>
+                    </div>
+                    <i data-lucide="message-circle" style="color: var(--brand-blue); flex-shrink:0;"></i>
+                </div>`;
+            }).join('');
+            lucide.createIcons();
+        } catch (e) { cont.innerHTML = vacio; lucide.createIcons(); }
+    }
+
+    // INIT RESILIENTE: cada paso va aislado para que un fallo puntual
+    // (ej. perfil con datos corruptos) no deje el panel completo sin funcionar.
+    async function init() {
+        // 1) Perfil (crítico): si falla, se informa y se ofrece reintentar
+        try {
+            const profile = await apiFetch('/profile');
+            currentProfileData = profile;
+            const un = document.getElementById('userName');
+            if (un) un.textContent = profile.nombre || 'Trabajador';
+            try { actualizarEstadoDeuda(profile.deuda); } catch (e) {}
+            try {
+                const pt = profile.perfil_trabajador || {};
+                pintarEstadoDisponibilidad(pt.disponible === 1 || pt.disponible === true, pt.radio_trabajo_km);
+            } catch (e) {}
+            try {
+                const vb = document.getElementById('verifBadge');
+                if (vb && profile.perfil_trabajador) {
+                    const pt = profile.perfil_trabajador;
+                    vb.style.display = 'inline-block';
+                    if (pt.verificado) { vb.innerText = 'Verificado'; vb.style.cssText += 'background:#ecfdf5; color:#15803d; display:inline-block;'; }
+                    else if (pt.documento_identidad) { vb.innerText = 'En revisión'; vb.style.cssText += 'background:var(--surface-soft); color:var(--brand-yellow-dark); display:inline-block;'; }
+                    else { vb.innerText = 'Pendiente'; vb.style.cssText += 'background:var(--surface-soft); color:var(--text-muted); display:inline-block;'; }
+                }
+            } catch (e) {}
+        } catch (error) {
+            console.error('Fallo al cargar el perfil:', error);
+            showToast('No se pudo cargar tu perfil: ' + error.message, 'error');
+            const un = document.getElementById('userName');
+            if (un) un.innerHTML = '<span style="cursor:pointer; text-decoration:underline;" onclick="init()">Reintentar</span>';
+        }
+
+        // 2) Servicios auxiliares: independientes entre sí
+        try { await cargarTasaBCV(); } catch (e) {}
+        try { conectarTiempoReal(); } catch (e) {}
+        try { actualizarBadgeMensajes(); } catch (e) {}
+        try { enviarUbicacionActual(); } catch (e) {}
+        try { loadAvailableJobs(); } catch (e) {}
+        try { iniciarVigiaOfertasAceptadas(); } catch (e) {}
+    }
+
+    // Cualquier error inesperado del panel se muestra en pantalla (no queda mudo)
+    window.addEventListener('error', (ev) => {
+        try { showToast('Error del panel: ' + (ev.message || 'desconocido'), 'error'); } catch (e) {}
+    });
+
+    // ==========================================================
+    // MODO ACTIVO (estilo apps de servicio): interruptor + radio
+    // ==========================================================
+    function pintarEstadoDisponibilidad(disponible, radioKm) {
+        const card = document.getElementById('estadoCard');
+        const sw = document.getElementById('switchDisponible');
+        if (!card || !sw) return;
+        sw.checked = !!disponible;
+        card.classList.toggle('encendido', !!disponible);
+        document.getElementById('estadoTitulo').textContent = disponible ? 'Estás en línea' : 'Estás fuera de línea';
+        document.getElementById('estadoSub').textContent = disponible
+            ? 'Recibirás avisos de trabajos dentro de tu radio.'
+            : 'Actívate para ver y recibir trabajos de tu zona.';
+        if (radioKm) document.getElementById('radioTrabajo').value = String(radioKm);
+    }
+
+    window.cambiarDisponibilidad = async function(activo) {
+        try {
+            const radio = parseInt(document.getElementById('radioTrabajo').value);
+            const r = await apiFetch('/trabajador/disponibilidad', {
+                method: 'PUT',
+                body: JSON.stringify({ disponible: activo, radio_km: radio })
+            });
+            pintarEstadoDisponibilidad(activo, radio);
+            showToast(r.message, 'success');
+            loadAvailableJobs();
+            if (activo) enviarUbicacionActual(); // refrescar posición al conectarse
+        } catch (e) {
+            showToast(e.message, 'error');
+            document.getElementById('switchDisponible').checked = !activo; // revertir
+        }
+    };
+
+    window.cambiarRadio = async function(valor) {
+        try {
+            await apiFetch('/trabajador/disponibilidad', {
+                method: 'PUT',
+                body: JSON.stringify({ disponible: document.getElementById('switchDisponible').checked, radio_km: parseInt(valor) })
+            });
+            showToast(`Radio de trabajo: ${valor} km.`, 'success');
+            loadAvailableJobs();
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    // ==========================================================
+    // UBICACIÓN DEL TRABAJADOR: habilita el orden por cercanía
+    // ("a X km de ti") en las solicitudes disponibles.
+    // ==========================================================
+    function enviarUbicacionActual() {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            try {
+                await apiFetch('/trabajador/ubicacion', {
+                    method: 'PUT',
+                    body: JSON.stringify({ latitud: pos.coords.latitude, longitud: pos.coords.longitude })
+                });
+                loadAvailableJobs(); // recargar con distancias calculadas
+            } catch (e) {}
+        }, () => {}, { enableHighAccuracy: true, timeout: 10000 });
+    }
+
+    // ==========================================================
+    // TIEMPO REAL (Socket.io). El "vigía" por polling queda de respaldo.
+    // ==========================================================
+    let socket = null;
+    function conectarTiempoReal() {
+        if (typeof io === 'undefined') return;
+        try {
+            socket = io({ auth: { token } });
+
+            socket.on('oferta_aceptada', async (d) => {
+                showToast('¡Tu oferta fue aceptada! Abriendo el chat...', 'success');
+                try {
+                    const activos = await apiFetch('/trabajador/activos');
+                    const job = activos.find(j => j.id === d.solicitud_id) || activos[0];
+                    if (job) {
+                        idsActivosConocidos = activos.map(j => j.id); // sincronizar el vigía
+                        abrirChat(job.id, `${job.cliente_nombre} ${job.cliente_apellido || ''}`.trim(), job.categoria_nombre);
+                    }
+                } catch (e) {}
+                if (document.getElementById('view-activos').classList.contains('active')) loadActiveJobs();
+                if (document.getElementById('view-explorar').classList.contains('active')) loadAvailableJobs();
+            });
+
+            // Trabajo nuevo dentro de tu radio (solo llega si estás EN LÍNEA)
+            socket.on('nueva_solicitud', (d) => {
+                const dist = d.distancia_km !== null && d.distancia_km !== undefined ? ` a ${d.distancia_km} km` : ' cerca de ti';
+                showToast(`Nuevo trabajo de ${d.categoria_nombre}${dist}${d.urgencia === 'urgente' ? ' (URGENTE)' : ''}.`, 'success');
+                if (document.getElementById('view-explorar').classList.contains('active')) loadAvailableJobs();
+            });
+
+            // ¡Ascenso en la Ruta del Relámpago!
+            socket.on('nivel_subido', (d) => {
+                showToast(`¡Subiste a nivel ${d.nombre}! Ahora tu comisión es ${d.comision}% y tu wallet sube a $${d.limite_wallet}.`, 'success');
+                apiFetch('/profile').then(p => { currentProfileData = p; actualizarEstadoDeuda(p.deuda); }).catch(() => {});
+            });
+
+            socket.on('trabajo_reasignado', (d) => {
+                showToast('El cliente reabrió la búsqueda de un trabajo que tenías asignado.', 'error');
+                cerrarChat();
+                if (document.getElementById('view-activos').classList.contains('active')) loadActiveJobs();
+            });
+
+            socket.on('nuevo_mensaje', (d) => {
+                if (chatSolicitudId && parseInt(d.solicitud_id) === parseInt(chatSolicitudId)) cargarMensajesChat(true);
+            });
+
+            socket.on('mensaje_recibido', (d) => {
+                actualizarBadgeMensajes();
+                if (!chatSolicitudId || parseInt(d.solicitud_id) !== parseInt(chatSolicitudId)) {
+                    showToast('Nuevo mensaje de un cliente. Revísalo en Mensajes.', 'success');
+                }
+            });
+        } catch (e) { socket = null; }
+    }
+
+    // ==========================================================
+    // VIGÍA: detecta cuando un cliente acepta tu oferta y abre el chat
+    // ==========================================================
+    let idsActivosConocidos = null;
+    async function revisarOfertasAceptadas() {
+        try {
+            const activos = await apiFetch('/trabajador/activos');
+            const idsActuales = activos.map(j => j.id);
+
+            if (idsActivosConocidos !== null) {
+                const nuevos = activos.filter(j => !idsActivosConocidos.includes(j.id));
+                if (nuevos.length > 0) {
+                    const job = nuevos[0];
+                    showToast(`¡${job.cliente_nombre} aceptó tu oferta de ${job.categoria_nombre}!`, 'success');
+                    // Refrescar vistas y abrir el chat de inmediato
+                    if (document.getElementById('view-activos').classList.contains('active')) loadActiveJobs();
+                    if (document.getElementById('view-explorar').classList.contains('active')) loadAvailableJobs();
+                    abrirChat(job.id, `${job.cliente_nombre} ${job.cliente_apellido || ''}`.trim(), job.categoria_nombre);
+                }
+            }
+            idsActivosConocidos = idsActuales;
+        } catch (e) { /* silencioso */ }
+    }
+    function iniciarVigiaOfertasAceptadas() {
+        revisarOfertasAceptadas();
+        setInterval(revisarOfertasAceptadas, 10000);
+    }
+
+
+    // ==========================================================
+    // RUTA DEL RELÁMPAGO: tarjeta de nivel con progreso
+    // ==========================================================
+    function pintarNivel(deuda) {
+        const cont = document.getElementById('nivelCard');
+        if (!cont || !deuda || !deuda.nivel_nombre) return;
+
+        const gradientes = {
+            1: 'linear-gradient(135deg, #b8871f, #e0a935)',
+            2: 'linear-gradient(135deg, #0a3a61, #6ba3f5)',
+            3: 'linear-gradient(135deg, #4c1d95, #a78bfa)'
+        };
+
+        let progresoHtml = '';
+        if (deuda.progreso) {
+            const p = deuda.progreso;
+            const barra = (actual, meta) => Math.min(100, Math.round((actual / meta) * 100));
+            progresoHtml = `
+                <div style="margin-top:14px; font-size:0.72rem; font-weight:800; text-transform:uppercase; opacity:0.9;">Camino a nivel ${p.siguiente_nombre}</div>
+                <div style="margin-top:8px; font-size:0.75rem; font-weight:700;">
+                    <div style="display:flex; justify-content:space-between;"><span>Trabajos completados</span><span>${p.trabajos.actual}/${p.trabajos.meta}</span></div>
+                    <div class="barra-progreso"><div style="width:${barra(p.trabajos.actual, p.trabajos.meta)}%"></div></div>
+                </div>
+                <div style="margin-top:8px; font-size:0.75rem; font-weight:700;">
+                    <div style="display:flex; justify-content:space-between;"><span>Calificación (mínimo > ${p.calificacion.meta})</span><span>${p.calificacion.actual.toFixed(2)} de 5</span></div>
+                    <div class="barra-progreso"><div style="width:${barra(p.calificacion.actual, 5)}%"></div></div>
+                </div>
+                <div style="margin-top:8px; font-size:0.75rem; font-weight:700;">
+                    <div style="display:flex; justify-content:space-between;"><span>Ganancias generadas</span><span>$${p.ganancias.actual.toFixed(0)}/$${p.ganancias.meta}</span></div>
+                    <div class="barra-progreso"><div style="width:${barra(p.ganancias.actual, p.ganancias.meta)}%"></div></div>
+                </div>`;
+        } else {
+            progresoHtml = `<div style="margin-top:12px; font-size:0.8rem; font-weight:800; opacity:0.95;">Nivel máximo alcanzado: eres el relámpago que nunca se apaga.</div>`;
+        }
+
+        cont.innerHTML = `
+        <div class="nivel-card" style="background:${gradientes[deuda.nivel] || gradientes[1]};">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <div style="width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center;">
+                        <i data-lucide="${deuda.nivel_icono}" style="width:24px; height:24px;"></i>
+                    </div>
+                    <div>
+                        <div style="font-size:0.68rem; font-weight:800; text-transform:uppercase; opacity:0.85;">Ruta del Relámpago · Nivel ${deuda.nivel}</div>
+                        <div style="font-size:1.35rem; font-weight:800;">${deuda.nivel_nombre}</div>
+                    </div>
+                </div>
+                <div style="text-align:right; font-size:0.72rem; font-weight:800; opacity:0.95;">
+                    <div>Comisión: ${deuda.porcentaje}%</div>
+                    <div>Wallet: $${deuda.limite_wallet}</div>
+                </div>
+            </div>
+            ${progresoHtml}
+        </div>`;
+        lucide.createIcons();
+    }
+
+    // ==========================================================
+    // MENSAJES NO LEÍDOS: badge en vivo en la pestaña Mensajes
+    // ==========================================================
+    async function actualizarBadgeMensajes() {
+        try {
+            const d = await apiFetch('/mensajes/no-leidos');
+            const b = document.getElementById('badgeMensajes');
+            if (!b) return;
+            if (d.total > 0) { b.textContent = d.total > 99 ? '99+' : d.total; b.classList.add('visible'); }
+            else b.classList.remove('visible');
+        } catch (e) {}
+    }
+    setInterval(actualizarBadgeMensajes, 30000);
+
+    // ==========================================================
+    // CHAT EN VIVO CON EL CLIENTE
+    // ==========================================================
+    let chatSolicitudId = null;
+    let chatPollingInterval = null;
+    let ultimoMensajeId = 0;
+
+    function escaparHTML(texto) {
+        const div = document.createElement('div');
+        div.innerText = texto;
+        return div.innerHTML;
+    }
+
+    window.abrirChat = function(solicitudId, titulo, subtitulo) {
+        chatSolicitudId = solicitudId;
+        if (!chatSolicitudId) return;
+
+        document.getElementById('chatTitulo').innerText = titulo || 'Cliente';
+        document.getElementById('chatSubtitulo').innerText = subtitulo || 'Conversación del servicio';
+        document.getElementById('chatMensajes').innerHTML = '<div class="chat-empty">Cargando conversación...</div>';
+        document.getElementById('chatOverlay').classList.add('active');
+        ultimoMensajeId = 0;
+        lucide.createIcons();
+
+        cargarMensajesChat(true);
+        setTimeout(actualizarBadgeMensajes, 800); // al abrir, los mensajes quedan leídos
+        if (socket) socket.emit('unirse_solicitud', chatSolicitudId);
+        if (chatPollingInterval) clearInterval(chatPollingInterval);
+        chatPollingInterval = setInterval(() => cargarMensajesChat(false), socket ? 15000 : 4000);
+    };
+
+    window.cerrarChat = function() {
+        document.getElementById('chatOverlay').classList.remove('active');
+        if (socket && chatSolicitudId) socket.emit('salir_solicitud', chatSolicitudId);
+        if (chatPollingInterval) { clearInterval(chatPollingInterval); chatPollingInterval = null; }
+        chatSolicitudId = null;
+    };
+
+    async function cargarMensajesChat(inicial) {
+        if (!chatSolicitudId) return;
+        try {
+            const mensajes = await apiFetch(`/solicitudes/${chatSolicitudId}/mensajes`);
+            const cont = document.getElementById('chatMensajes');
+            if (mensajes.length === 0) {
+                cont.innerHTML = '<div class="chat-empty">Aún no hay mensajes.<br>Escríbele al cliente para coordinar</div>';
+                return;
+            }
+            const nuevoUltimo = mensajes[mensajes.length - 1].id;
+            if (!inicial && nuevoUltimo === ultimoMensajeId) return;
+            ultimoMensajeId = nuevoUltimo;
+
+            cont.innerHTML = mensajes.map(m => {
+                const esMio = m.remitente_id === (currentProfileData.id || 0);
+                const hora = new Date(m.fecha).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                return `<div class="chat-bubble ${esMio ? 'mio' : 'otro'}">${escaparHTML(m.contenido)}<span class="chat-hora">${hora}</span></div>`;
+            }).join('');
+            cont.scrollTop = cont.scrollHeight;
+        } catch (e) { /* el polling reintenta */ }
+    }
+
+    window.enviarMensajeChat = async function() {
+        const input = document.getElementById('chatInput');
+        const contenido = input.value.trim();
+        if (!contenido || !chatSolicitudId) return;
+        input.value = '';
+        try {
+            await apiFetch(`/solicitudes/${chatSolicitudId}/mensajes`, {
+                method: 'POST',
+                body: JSON.stringify({ contenido })
+            });
+            cargarMensajesChat(true);
+        } catch (e) { showToast(e.message, 'error'); input.value = contenido; }
+    };
+
+    async function loadAvailableJobs() {
+        const list = document.getElementById('availableJobsList');
+        list.innerHTML = '<div class="empty-state"><i data-lucide="loader" class="spin"></i> Cargando...</div>';
+        try {
+            const data = await apiFetch('/solicitudes/disponibles');
+
+            // Fuera de línea: el servidor no entrega trabajos hasta activarse
+            if (data && data.inactivo) {
+                pintarEstadoDisponibilidad(false, data.radio_km);
+                list.innerHTML = `
+                <div class="empty-state" style="padding-top:36px;">
+                    <i data-lucide="power" style="width:44px; height:44px; color: var(--text-muted);"></i>
+                    <h3 style="font-size:1.05rem; color: var(--text-dark); margin:8px 0 4px;">Estás fuera de línea</h3>
+                    <p style="font-size:0.85rem; color:var(--text-muted); max-width:300px;">Activa el interruptor de arriba para ver los trabajos disponibles en tu radio y recibir avisos al instante.</p>
+                </div>`;
+                lucide.createIcons();
+                return;
+            }
+            const jobs = data; 
+            if (jobs.length === 0) {
+                // Si el trabajador no tiene especialidades configuradas, nunca verá trabajos: lo guiamos
+                let extra = '';
+                try {
+                    const mias = await apiFetch('/trabajador/especialidades');
+                    if (mias.length === 0) {
+                        extra = `<button class="btn-primary" style="max-width:280px;" onclick="abrirModalEspecialidades()"><i data-lucide="award" style="width:16px;"></i> Configurar mis especialidades</button>
+                                 <p style="font-size:0.8rem;">No tienes especialidades asignadas, por eso no ves solicitudes.</p>`;
+                    }
+                } catch(e) {}
+                list.innerHTML = `<div class="empty-state"><i data-lucide="inbox" style="width: 40px; height: 40px; opacity: 0.5;"></i>No hay solicitudes nuevas para tu especialidad.${extra}</div>`;
+                lucide.createIcons(); return;
+            }
+            let html = '';
+            jobs.forEach(job => {
+                const date = new Date(job.fecha_creacion).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'});
+                // Mostramos un mini-mapa si el cliente envió coordenadas (Lat/Lng)
+                let miniMapHtml = '';
+                if(job.latitud && job.longitud) {
+                    miniMapHtml = `<a href="https://www.google.com/maps/search/?api=1&query=${job.latitud},${job.longitud}" target="_blank" style="font-size:0.75rem; color:var(--brand-blue); text-decoration:none;"><i data-lucide="external-link" style="width:12px;"></i> Ver en GPS</a>`;
+                }
+
+                // Distancia calculada por el servidor (Haversine) desde tu ubicación
+                const distanciaHtml = job.distancia_km !== null && job.distancia_km !== undefined
+                    ? `<span style="font-size:0.75rem; font-weight:800; color: var(--brand-blue);"><i data-lucide="map-pin" style="width:12px; height:12px; vertical-align:-2px;"></i> a ${job.distancia_km} km de ti</span>`
+                    : '';
+                // Foto del problema adjuntada por el cliente
+                const fotoHtml = job.foto_url
+                    ? `<a href="${job.foto_url}" target="_blank" style="display:block; margin:8px 0;"><img src="${job.foto_url}" alt="Foto del problema" style="width:100%; max-height:130px; object-fit:cover; border-radius:10px; border:1px solid var(--border-color);"></a>`
+                    : '';
+
+                html += `
+                <div class="job-card">
+                    <div class="job-header">
+                        <div><div class="job-title">${job.categoria_nombre}</div><div style="font-size:0.75rem; color:var(--text-muted);">Cliente: ${job.cliente_nombre}</div>${distanciaHtml}</div>
+                        <div class="job-urgency urgency-${job.urgencia}">${job.urgencia}</div>
+                    </div>
+                    ${fotoHtml}
+                    <div class="job-detail"><i data-lucide="map-pin" style="width:14px;"></i> <div><span>${job.direccion}</span><br>${miniMapHtml}</div></div>
+                    <div class="job-detail"><i data-lucide="align-left" style="width:14px;"></i> <span>${job.descripcion || 'Sin detalles extra'}</span></div>
+                    <div class="job-detail"><i data-lucide="clock" style="width:14px;"></i> <span>Publicado a las ${date}</span></div>
+                    <div class="action-row"><button class="btn-primary" onclick="abrirModalOferta(${job.id})"><i data-lucide="dollar-sign" style="width:16px;"></i> Enviar Oferta</button></div>
+                </div>`;
+            });
+            list.innerHTML = html; lucide.createIcons();
+        } catch (error) {
+            // Bloqueo por deuda vencida: el servidor devuelve el detalle en el mensaje
+            if ((error.message || '').includes('bloqueada')) {
+                list.innerHTML = `
+                <div class="empty-state" style="padding-top:40px;">
+                    <i data-lucide="lock" style="width:44px; height:44px; color: var(--danger);"></i>
+                    <h3 style="font-size:1.05rem; color: var(--danger); margin:8px 0 4px;">Cuenta bloqueada por deuda</h3>
+                    <p style="font-size:0.85rem; color:var(--text-muted); max-width:320px;">${error.message}</p>
+                    <button class="btn-primary" style="max-width:260px;" onclick="abrirModalComisiones()"><i data-lucide="credit-card" style="width:16px;"></i> Pagar mi deuda</button>
+                </div>`;
+                lucide.createIcons();
+            } else {
+                list.innerHTML = '<div class="empty-state">Error cargando solicitudes.</div>';
+            }
+        }
+    }
+
+    async function loadActiveJobs() {
+        const list = document.getElementById('activeJobsList');
+        try {
+            const jobs = await apiFetch('/trabajador/activos');
+            if (jobs.length === 0) {
+                list.innerHTML = '<div class="empty-state">No tienes trabajos en curso actualmente.</div>'; return;
+            }
+            let html = '';
+            jobs.forEach(job => {
+                const statusClass = `status-${job.estado.replace('_', '')}`;
+                const formatStatus = formatearEstado(job.estado);
+                let actionButtons = '';
+                const btnAbandonar = ['asignado','en_camino','en_proceso'].includes(job.estado)
+                    ? `<button style="background:transparent; border:1.5px dashed var(--danger); color:var(--danger); padding:8px; border-radius:8px; font-weight:800; font-size:0.75rem; cursor:pointer; font-family:inherit;" onclick="abandonarTrabajo(${job.id})">Abandonar</button>`
+                    : '';
+                if (job.estado === 'asignado') actionButtons = `<button class="btn-primary" onclick="updateJobStatus(${job.id}, 'en_camino')"><i data-lucide="navigation"></i> Voy en camino</button>`;
+                else if (job.estado === 'en_camino') actionButtons = `<button class="btn-primary" onclick="updateJobStatus(${job.id}, 'en_proceso')"><i data-lucide="tool"></i> Iniciar Trabajo</button>`;
+                else if (job.estado === 'en_proceso') actionButtons = `<button class="btn-success" onclick="updateJobStatus(${job.id}, 'completado')"><i data-lucide="check-circle"></i> Finalizar Trabajo</button>`;
+
+                const bs = formatearBs(job.costo_estimado);
+                html += `
+                <div class="job-card">
+                    <div class="status-badge ${statusClass}">${formatStatus}</div>
+                    <div class="job-title">${job.categoria_nombre}</div>
+                    <div class="job-detail"><i data-lucide="user"></i> <span>Cliente: ${job.cliente_nombre} ${job.cliente_apellido || ''}</span></div>
+                    <div class="job-detail"><i data-lucide="map-pin"></i> <span>${job.direccion}</span></div>
+                    <div class="job-detail"><i data-lucide="dollar-sign"></i> <span>Acordado: $${job.costo_estimado} ${bs ? `<span class="precio-bs">(≈ ${bs} · Tasa BCV)</span>` : ''}</span></div>
+                    <div class="action-row">
+                        <button class="btn-chat-inline" onclick="abrirChat(${job.id}, '${(job.cliente_nombre + ' ' + (job.cliente_apellido || '')).trim().replace(/'/g, '')}', '${job.categoria_nombre.replace(/'/g, '')}')">
+                            <i data-lucide="message-circle" style="width:16px;"></i> Chat
+                        </button>
+                        ${actionButtons}
+                        ${btnAbandonar}
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html; lucide.createIcons();
+        } catch (error) { list.innerHTML = '<div class="empty-state">Error cargando trabajos activos.</div>'; }
+    }
+
+    // ==========================================================
+    // VERIFICACIÓN DE IDENTIDAD (foto de la cédula)
+    // ==========================================================
+    window.abrirModalVerificacion = function() {
+        const pt = currentProfileData.perfil_trabajador || {};
+        let estadoHtml;
+        if (pt.verificado) {
+            estadoHtml = '<div style="background:#ecfdf5; color:#15803d; border-radius:10px; padding:12px; font-size:0.85rem; font-weight:800; text-align:center; margin-bottom:14px;">Tu identidad está verificada. Los clientes ven la insignia en tu perfil.</div>';
+        } else if (pt.documento_identidad) {
+            estadoHtml = '<div style="background:var(--surface-soft); color:var(--brand-yellow-dark); border-radius:10px; padding:12px; font-size:0.85rem; font-weight:800; text-align:center; margin-bottom:14px;">Documento en revisión por el equipo Fixio.</div>';
+        } else {
+            estadoHtml = '<div style="background:var(--surface-soft); color:var(--text-muted); border-radius:10px; padding:12px; font-size:0.85rem; font-weight:700; text-align:center; margin-bottom:14px;">Aún no has subido tu documento. Los perfiles verificados generan más confianza y reciben más trabajos.</div>';
+        }
+        const html = `
+            <h3 style="font-weight:800; color:var(--text-dark); margin-bottom:6px;"><i data-lucide="badge-check" style="width:18px; height:18px; vertical-align:-2px;"></i> Verificación de identidad</h3>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:14px;">Sube una foto clara de tu cédula de identidad. Solo el equipo Fixio puede verla.</p>
+            ${estadoHtml}
+            <input type="file" id="docInput" accept="image/*" style="display:none;" onchange="subirDocumento(event)">
+            <button class="btn-primary" style="width:100%;" onclick="document.getElementById('docInput').click()">
+                <i data-lucide="upload" style="width:16px;"></i> ${pt.documento_identidad ? 'Reemplazar documento' : 'Subir foto de mi cédula'}
+            </button>
+            <button class="btn-secondary" style="width:100%; margin-top:10px;" onclick="closeModal()">Cerrar</button>
+        `;
+        openModal(html);
+    };
+
+    window.subirDocumento = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = async () => {
+                const MAX = 1200;
+                const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * escala);
+                canvas.height = Math.round(img.height * escala);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                try {
+                    const r = await apiFetch('/trabajador/documento', {
+                        method: 'POST',
+                        body: JSON.stringify({ documento: canvas.toDataURL('image/jpeg', 0.8) })
+                    });
+                    showToast(r.message, 'success');
+                    const p = await apiFetch('/profile');
+                    currentProfileData = p;
+                    abrirModalVerificacion();
+                } catch (err) { showToast(err.message, 'error'); }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // ==========================================================
+    // COMISIONES FIXIO (15% por trabajo) Y CONTROL DE DEUDA
+    // ==========================================================
+    function actualizarEstadoDeuda(deuda) {
+        try { pintarNivel(deuda); } catch (e) {}
+
+        // Badge en el menú de perfil
+        const badge = document.getElementById('deudaBadge');
+        if (badge) {
+            if (deuda && deuda.deuda_total > 0) {
+                badge.innerText = `$${deuda.deuda_total.toFixed(2)}`;
+                badge.style.display = 'inline-block';
+            } else badge.style.display = 'none';
+        }
+
+        // Banner de bloqueo (perenne mientras exista deuda vencida)
+        let banner = document.getElementById('deudaBanner');
+        if (deuda && deuda.bloqueado) {
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'deudaBanner';
+                banner.style.cssText = 'position:sticky; top:0; z-index:99; background:#b91c1c; color:#fff; padding:10px 16px; font-size:0.82rem; font-weight:800; text-align:center; cursor:pointer;';
+                document.body.insertBefore(banner, document.body.children[2]);
+            }
+            banner.innerHTML = `WALLET LLENA · Debes $${deuda.deuda_total.toFixed(2)} de $${deuda.limite_wallet} permitidos (nivel ${deuda.nivel_nombre}). Toca aquí para pagar y reactivarte.`;
+            banner.onclick = abrirModalComisiones;
+        } else if (banner) banner.remove();
+
+        // Aviso preventivo cuando la wallet está por llenarse (queda < 30% de margen)
+        if (deuda && !deuda.bloqueado && deuda.deuda_total > 0 && deuda.margen_disponible !== undefined &&
+            deuda.margen_disponible <= deuda.limite_wallet * 0.3) {
+            showToast(`Tu wallet está casi llena: $${deuda.deuda_total.toFixed(2)} de $${deuda.limite_wallet}. Te quedan $${deuda.margen_disponible.toFixed(2)} antes del bloqueo.`, 'error');
+        }
+    }
+
+    window.abrirModalComisiones = async function() {
+        openModal('<div class="empty-state"><i data-lucide="loader"></i> Cargando tu balance...</div>');
+        try {
+            const { comisiones, resumen } = await apiFetch('/trabajador/comisiones');
+            const bsTotal = formatearBs(resumen.deuda_total);
+
+            let estadoHtml = '';
+            if (resumen.bloqueado) {
+                estadoHtml = `<div style="background:#b91c1c; color:#fff; border-radius:10px; padding:10px 14px; font-size:0.8rem; font-weight:800; margin-bottom:14px;">Wallet llena: alcanzaste tu límite de $${resumen.limite_wallet} (nivel ${resumen.nivel_nombre}). Paga para volver a recibir trabajos.</div>`;
+            } else if (resumen.deuda_pendiente > 0) {
+                estadoHtml = `<div style="background: var(--surface-soft); border:1px dashed var(--brand-yellow-dark); border-radius:10px; padding:10px 14px; font-size:0.8rem; font-weight:700; color:var(--text-dark); margin-bottom:14px;">Margen disponible en tu wallet: <b>$${resumen.margen_disponible.toFixed(2)}</b> de $${resumen.limite_wallet}. Al llenarse, quedas bloqueado hasta pagar.</div>`;
+            } else if (resumen.deuda_reportada > 0) {
+                estadoHtml = `<div style="background: var(--surface-soft); border-radius:10px; padding:10px 14px; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:14px;">Pago reportado por $${resumen.deuda_reportada.toFixed(2)}. Esperando confirmación del equipo Fixio.</div>`;
+            }
+
+            const listaHtml = comisiones.length === 0
+                ? '<p style="font-size:0.85rem; color:var(--text-muted); text-align:center; padding:14px 0;">Aún no se han generado comisiones.<br>Se crean automáticamente al completar cada trabajo.</p>'
+                : comisiones.map(c => {
+                    const chip = c.estado === 'pagada'
+                        ? '<span style="color:#22c55e; font-weight:800;">Pagada</span>'
+                        : c.estado === 'reportada'
+                            ? '<span style="color:var(--brand-yellow-dark); font-weight:800;">En revisión</span>'
+                            : `<span style="color:var(--text-muted); font-weight:800;">Pendiente</span>`;
+                    return `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-color); font-size:0.82rem;">
+                        <div>
+                            <div style="font-weight:800; color:var(--text-dark);">${c.categoria_nombre}</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700;">Servicio: $${c.monto_servicio} · ${c.porcentaje}%</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-weight:800; color:var(--text-dark);">$${c.monto_comision}</div>
+                            <div style="font-size:0.7rem;">${chip}</div>
+                        </div>
+                    </div>`;
+                }).join('');
+
+            const html = `
+                <h3 style="font-weight:800; color: var(--text-dark); margin-bottom:4px;"><i data-lucide="wallet" style="width:18px; height:18px; vertical-align:-2px;"></i> Wallet Fixio</h3>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:14px;">Tu nivel <b>${resumen.nivel_nombre}</b> paga ${resumen.porcentaje}% por trabajo. Límite de tu wallet: $${resumen.limite_wallet} en comisiones acumuladas.</p>
+
+                <div style="background: var(--brand-gradient); color:#fff; border-radius:14px; padding:16px; text-align:center; margin-bottom:14px;">
+                    <div style="font-size:0.72rem; font-weight:800; opacity:0.85; text-transform:uppercase;">Deuda actual</div>
+                    <div style="font-size:1.8rem; font-weight:800;">$${resumen.deuda_total.toFixed(2)}</div>
+                    ${bsTotal ? `<div style="font-size:0.8rem; font-weight:700; opacity:0.9;">≈ ${bsTotal} · Tasa BCV</div>` : ''}
+                </div>
+
+                ${estadoHtml}
+
+                <div style="max-height: 220px; overflow-y:auto; margin-bottom:14px;">${listaHtml}</div>
+
+                ${resumen.deuda_pendiente > 0 ? `
+                <button class="btn-primary" style="width:100%;" onclick="abrirModalPagarDeuda(${resumen.deuda_pendiente})">
+                    <i data-lucide="credit-card" style="width:16px;"></i> Pagar deuda ($${resumen.deuda_pendiente.toFixed(2)})
+                </button>` : ''}
+                <button class="btn-secondary" style="width:100%; margin-top:10px;" onclick="closeModal()">Cerrar</button>
+            `;
+            openModal(html);
+        } catch (e) {
+            openModal(`<p style="color:var(--danger); font-weight:700;">${e.message}</p><button class="btn-secondary" style="width:100%; margin-top:12px;" onclick="closeModal()">Cerrar</button>`);
+        }
+    };
+
+    window.abrirModalPagarDeuda = function(monto) {
+        const bs = formatearBs(monto);
+        const html = `
+            <h3 style="font-weight:800; color: var(--text-dark); margin-bottom:6px;">Pagar comisiones a Fixio</h3>
+            <div style="background: var(--surface-softer); border:1px solid var(--border-color); border-radius:12px; padding:14px; text-align:center; margin-bottom:14px;">
+                <div style="font-size:0.72rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Total a pagar</div>
+                <div style="font-size:1.6rem; font-weight:800; color:var(--text-dark);">$${monto.toFixed(2)}</div>
+                ${bs ? `<div style="font-size:0.8rem; font-weight:800; color: var(--brand-blue);">≈ ${bs} (Tasa BCV)</div>` : ''}
+            </div>
+            <div class="form-group">
+                <label>Método de pago</label>
+                <select id="comisionMetodo" class="form-input" onchange="document.getElementById('comisionRefGroup').style.display = this.value === 'Efectivo / Divisas' ? 'none' : 'flex'">
+                    <option value="Pago Móvil">Pago Móvil</option>
+                    <option value="Zelle">Zelle</option>
+                    <option value="Transferencia">Transferencia bancaria</option>
+                    <option value="Efectivo / Divisas">Efectivo / Divisas</option>
+                </select>
+            </div>
+            <div class="form-group" id="comisionRefGroup" style="display:flex; flex-direction:column;">
+                <label>Número de referencia</label>
+                <input type="text" id="comisionReferencia" class="form-input" placeholder="Ej: 001234567890">
+            </div>
+            <button class="btn-primary" style="width:100%;" onclick="reportarPagoComisiones()">Reportar Pago</button>
+            <button class="btn-secondary" style="width:100%; margin-top:10px;" onclick="abrirModalComisiones()">Volver</button>
+        `;
+        openModal(html);
+    };
+
+    window.reportarPagoComisiones = async function() {
+        const metodo = document.getElementById('comisionMetodo').value;
+        const referencia = document.getElementById('comisionReferencia').value.trim();
+        if (metodo !== 'Efectivo / Divisas' && !referencia) return showToast('Ingresa la referencia del pago.', 'error');
+        try {
+            const r = await apiFetch('/trabajador/comisiones/reportar-pago', {
+                method: 'POST',
+                body: JSON.stringify({ metodo_pago: metodo, referencia_pago: referencia || null })
+            });
+            showToast(r.message, 'success');
+            abrirModalComisiones();
+            // Refrescar el estado de deuda global
+            try { const p = await apiFetch('/profile'); actualizarEstadoDeuda(p.deuda); } catch(e) {}
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    window.abandonarTrabajo = async function(jobId) {
+        if (!confirm('Abandonar este trabajo registrará una PENALIZACIÓN en tu perfil visible para Fixio. El cliente recuperará sus otras ofertas. ¿Continuar?')) return;
+        try {
+            const r = await apiFetch(`/solicitudes/${jobId}/abandonar`, { method: 'PUT' });
+            showToast(r.message, 'error');
+            cerrarChat();
+            loadActiveJobs();
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    window.updateJobStatus = async function(jobId, newStatus) {
+        try { 
+            const r = await apiFetch(`/solicitudes/${jobId}/estado`, { method: 'PUT', body: JSON.stringify({ estado: newStatus }) }); 
+            showToast(`Estado actualizado a: ${formatearEstado(newStatus)}`, 'success');
+            // Al completar, informar de la comisión generada a favor de la plataforma
+            if (newStatus === 'completado' && r.comision) {
+                setTimeout(() => showToast(`Se generó tu comisión Fixio del ${r.comision.porcentaje}%: $${r.comision.monto.toFixed(2)}. Revísala en Perfil > Comisiones.`, 'success'), 800);
+                try { const p = await apiFetch('/profile'); actualizarEstadoDeuda(p.deuda); } catch(e) {}
+            }
+            loadActiveJobs(); 
+        } 
+        catch (error) { showToast(error.message, 'error'); }
+    }
+
+    async function loadHistory() {
+        const list = document.getElementById('historialList');
+        try {
+            // CORRECCIÓN: el servidor devuelve { solicitudes, ganancias_totales },
+            // el código anterior esperaba un array y por eso el historial siempre fallaba.
+            const data = await apiFetch('/trabajador/historial');
+            const jobs = Array.isArray(data) ? data : (data.solicitudes || []);
+            const ganancias = Array.isArray(data) ? null : data.ganancias_totales;
+
+            if (jobs.length === 0) { list.innerHTML = '<div class="empty-state">Tu historial está vacío.</div>'; return; }
+
+            let html = '';
+            if (ganancias !== null) {
+                const bsGanancias = formatearBs(ganancias);
+                html += `
+                <div class="job-card" style="background: var(--brand-gradient); color: #fff; border: none;">
+                    <div style="font-size:0.8rem; font-weight:700; opacity:0.85;">Ganancias totales</div>
+                    <div style="font-size:1.6rem; font-weight:800;">$${ganancias}</div>
+                    ${bsGanancias ? `<div style="font-size:0.8rem; font-weight:700; opacity:0.85;">≈ ${bsGanancias} · Tasa BCV</div>` : ''}
+                </div>`;
+            }
+
+            jobs.forEach(job => {
+                const date = new Date(job.fecha_creacion).toLocaleDateString('es-ES');
+                const monto = job.costo_final || job.costo_estimado;
+                const bs = formatearBs(monto);
+
+                // Estado del pago (módulo de pagos estilo apps de servicio)
+                let pagoHtml = '';
+                if (job.pago_estado === 'pagado') {
+                    pagoHtml = `<div style="margin-top:8px; font-size:0.78rem; font-weight:800; color:#22c55e;"><i data-lucide="badge-check" style="width:13px; vertical-align:middle;"></i> Pago confirmado (${job.metodo_pago})</div>`;
+                } else if (job.pago_estado === 'pendiente') {
+                    pagoHtml = `
+                    <div style="margin-top:10px; padding:10px; border-radius:10px; background: var(--surface-soft); border: 1px dashed var(--brand-yellow-dark);">
+                        <div style="font-size:0.8rem; font-weight:800; color: var(--brand-yellow-dark);">El cliente reportó un pago por ${job.metodo_pago}</div>
+                        ${job.referencia_pago ? `<div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; margin:4px 0;">Referencia: ${job.referencia_pago}</div>` : ''}
+                        <button class="btn-success" style="width:100%; margin-top:6px; padding:8px;" onclick="confirmarPago(${job.pago_id})">
+                            <i data-lucide="check-circle" style="width:15px;"></i> Confirmar que lo recibí
+                        </button>
+                    </div>`;
+                } else {
+                    pagoHtml = `<div style="margin-top:8px; font-size:0.78rem; font-weight:800; color:var(--text-muted);"><i data-lucide="clock" style="width:13px; vertical-align:middle;"></i> Esperando pago del cliente</div>`;
+                }
+
+                html += `
+                <div class="job-card">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="font-weight:800; color:var(--brand-blue);">${job.categoria_nombre}</span>
+                        <span style="text-align:right;"><span style="color:#22c55e; font-weight:800;">$${monto}</span>${bs ? `<br><span class="precio-bs">≈ ${bs}</span>` : ''}</span>
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">Cliente: ${job.cliente_nombre} · Completado el: ${date}</div>
+                    ${pagoHtml}
+                </div>`;
+            });
+            list.innerHTML = html;
+            lucide.createIcons();
+        } catch (error) { list.innerHTML = '<div class="empty-state">Error cargando historial.</div>'; }
+    }
+
+    window.confirmarPago = async function(pagoId) {
+        try {
+            const r = await apiFetch(`/pagos/${pagoId}/confirmar`, { method: 'PUT' });
+            showToast(r.message, 'success');
+            loadHistory();
+        } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    // --- CARGA DE PERFIL TRABAJADOR OPTIMIZADA (CANVAS) ---
+    async function subirAvatar(event) {
+        const file = event.target.files[0];
+        if(!file) return;
+        
+        showToast("Procesando imagen...", "success");
+
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        
+        img.onload = async () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const MAX_WIDTH = 400; const MAX_HEIGHT = 400;
+            let width = img.width; let height = img.height;
+
+            if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+            else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+
+            canvas.width = width; canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+            document.getElementById('profileAvatarInitials').innerHTML = `<img src="${base64Image}" style="width: 100%; height: 100%; object-fit: cover;">`;
+            
+            try { 
+                await apiFetch('/profile', { method: 'PUT', body: JSON.stringify({ avatar_url: base64Image }) }); 
+                showToast("Foto guardada en tu perfil.", "success");
+            } 
+            catch (error) { showToast("Error al guardar: " + error.message, "error"); }
+        };
+    }
+
+    async function loadProfile() {
+        try {
+            const profile = await apiFetch('/profile');
+            currentProfileData = profile;
+            
+            const trabajador = profile.perfil_trabajador || {};
+
+            if (profile.avatar_url) {
+                document.getElementById('profileAvatarInitials').innerHTML = `<img src="${profile.avatar_url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+            } else {
+                document.getElementById('profileAvatarInitials').innerText = (profile.nombre.charAt(0) + profile.apellido.charAt(0)).toUpperCase();
+            }
+            
+            document.getElementById('profileFullName').innerText = `${profile.nombre} ${profile.apellido}`;
+            const oficios = (profile.especialidades && profile.especialidades.length > 0)
+                ? profile.especialidades.join(', ')
+                : 'Sin especialidad asignada';
+            document.getElementById('profileOficio').innerText = `Oficio: ${oficios}`;
+            document.getElementById('profileTotalServices').innerText = trabajador.total_servicios || '0';
+            document.getElementById('profileRating').innerText = trabajador.calificacion_promedio || '5.0';
+
+            lucide.createIcons();
+        } catch (error) { console.error("Error cargando perfil:", error); }
+    }
+
+    // --- SISTEMA DE MODALES ---
+    function openModal(htmlContent) {
+        document.getElementById('modalBody').innerHTML = htmlContent;
+        document.getElementById('appModal').style.display = 'flex';
+        lucide.createIcons();
+    }
+    function closeModal() { document.getElementById('appModal').style.display = 'none'; selectedJobId = null; }
+
+    function abrirModalOferta(jobId) {
+        selectedJobId = jobId;
+        const html = `
+            <h3 style="margin-bottom: 16px; color: var(--brand-blue); font-weight: 800;">Enviar Cotización</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Ingresa el monto estimado por tu servicio. El cliente revisará tu oferta.</p>
+            <input type="number" id="offerAmount" class="form-input" placeholder="Monto en $" min="1" style="margin-bottom: 6px;" oninput="actualizarEquivalenteBs(this.value)">
+            <p id="offerBsEquiv" class="precio-bs" style="margin-bottom: 16px; min-height: 1em;"></p>
+            <div class="action-row">
+                <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn-primary" onclick="enviarOferta()">Enviar Oferta</button>
+            </div>
+        `;
+        openModal(html);
+    }
+
+    window.actualizarEquivalenteBs = function(valor) {
+        const el = document.getElementById('offerBsEquiv');
+        if (!el) return;
+        const bs = formatearBs(valor);
+        el.innerText = bs ? `Equivale a ≈ ${bs} (Tasa referencial BCV)` : '';
+    };
+
+    window.enviarOferta = async function() {
+        const amount = document.getElementById('offerAmount').value;
+        if (!amount || amount <= 0) return showToast('Ingresa un monto válido.', 'error');
+        try {
+            await apiFetch('/ofertas', { method: 'POST', body: JSON.stringify({ solicitud_id: selectedJobId, monto: amount }) });
+            showToast('Oferta enviada exitosamente.', 'success');
+            closeModal(); loadAvailableJobs();
+        } catch (error) { showToast(error.message, 'error'); }
+    }
+
+    function abrirModalEditarPerfil() {
+        const html = `
+            <h3 style="margin-bottom: 15px; font-weight: 800; color: var(--brand-blue);">Editar Cuenta</h3>
+            <div class="form-group"><label>Nombre</label><input type="text" id="editNombre" class="form-input" value="${currentProfileData.nombre || ''}"></div>
+            <div class="form-group"><label>Apellido</label><input type="text" id="editApellido" class="form-input" value="${currentProfileData.apellido || ''}"></div>
+            <div class="form-group"><label>Teléfono</label><input type="text" id="editTelefono" class="form-input" value="${currentProfileData.telefono || ''}" placeholder="Ej: 04141234567"></div>
+            <button class="btn-primary" style="width:100%; margin-top:10px;" onclick="guardarCambiosPerfil()">Guardar Cambios</button>
+            <button class="btn-secondary" style="width:100%; margin-top:10px;" onclick="closeModal()">Cancelar</button>
+        `;
+        openModal(html);
+    }
+
+    async function guardarCambiosPerfil() {
+        const nombre = document.getElementById('editNombre').value;
+        const apellido = document.getElementById('editApellido').value;
+        const telefono = document.getElementById('editTelefono').value;
+        if(!nombre || !apellido) return showToast("Nombre y apellido son obligatorios.", "error");
+        try {
+            await apiFetch('/profile', { method: 'PUT', body: JSON.stringify({ nombre, apellido, telefono }) });
+            showToast('Perfil actualizado correctamente.', 'success');
+            loadProfile(); closeModal();
+        } catch(e) { showToast(e.message, 'error'); }
+    }
+
+    async function abrirModalEspecialidades() {
+        openModal('<div class="empty-state"><i data-lucide="loader"></i> Cargando especialidades...</div>');
+        try {
+            const [todas, mias] = await Promise.all([
+                apiFetch('/categorias'),
+                apiFetch('/trabajador/especialidades')
+            ]);
+            const misIds = mias.map(m => m.id);
+
+            const checks = todas.map(c => `
+                <label style="display:flex; align-items:center; gap:10px; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 8px; cursor:pointer; background:var(--surface-card2);">
+                    <input type="checkbox" class="chk-especialidad" value="${c.id}" ${misIds.includes(c.id) ? 'checked' : ''} style="width:16px; height:16px; accent-color: var(--brand-blue);">
+                    <span style="font-weight:700; font-size:0.9rem;">${c.nombre}</span>
+                </label>
+            `).join('');
+
+            const html = `
+                <h3 style="margin-bottom: 6px; font-weight: 800; text-align:center;">Tus Especialidades</h3>
+                <p style="font-size:0.82rem; color:var(--text-muted); text-align:center; margin-bottom:14px;">Solo verás solicitudes de las categorías que marques.</p>
+                <div style="max-height: 280px; overflow-y: auto; margin-bottom: 14px;">${checks}</div>
+                <div class="action-row">
+                    <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button class="btn-primary" onclick="guardarEspecialidades()">Guardar</button>
+                </div>
+            `;
+            openModal(html);
+        } catch (e) {
+            openModal('<div class="empty-state">Error cargando especialidades.</div><button class="btn-secondary" style="width:100%;" onclick="closeModal()">Cerrar</button>');
+        }
+    }
+
+    window.guardarEspecialidades = async function() {
+        const seleccionadas = [...document.querySelectorAll('.chk-especialidad:checked')].map(c => parseInt(c.value));
+        if (seleccionadas.length === 0) return showToast('Marca al menos una especialidad.', 'error');
+        try {
+            await apiFetch('/trabajador/especialidades', { method: 'PUT', body: JSON.stringify({ categorias: seleccionadas }) });
+            showToast('Especialidades actualizadas.', 'success');
+            closeModal();
+            loadProfile();
+            loadAvailableJobs();
+        } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    function abrirModalSoporte() {
+        const html = `
+            <h3 style="margin-bottom: 10px; font-weight: 800; text-align:center;">Centro de Ayuda</h3>
+            <p style="font-size:0.9rem; color:var(--text-muted); text-align:center; margin-bottom:20px;">¿Necesitas asistencia técnica?</p>
+            <button class="btn-success" style="width:100%; margin-bottom: 12px;" onclick="window.open('https://wa.me/584240000000', '_blank')"><i data-lucide="message-circle"></i> Escribir al WhatsApp</button>
+            <button class="btn-secondary" style="width:100%;" onclick="closeModal()">Cerrar</button>
+        `;
+        openModal(html);
+    }
+
+    function formatearEstado(estado) {
+        const estados = { 'buscando': 'Buscando', 'asignado': 'Asignado', 'en_camino': 'En Camino a Ubicación', 'en_proceso': 'Trabajo en Proceso', 'completado': 'Completado', 'cancelado': 'Cancelado' };
+        return estados[estado] || estado;
+    }
+
+    document.getElementById('appModal').addEventListener('click', function(e) { if(e.target === this) closeModal(); });
+
+    init();
+</script>
+<script>
+    // PWA: registrar el service worker (necesario para instalar como app y para la TWA de Play Store)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+    }
+</script>
+</body>
+</html>

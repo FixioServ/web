@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cargando - Fixio</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --brand-yellow: #e0a935;
+        --brand-yellow-light: #ffe9a8;
+        --text-light: #eaf2ff;
+        --text-muted: #9fb4d8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        font-family: 'Nunito', sans-serif;
+        background: linear-gradient(to bottom, #0a1f3d 0%, #0c2a52 55%, #062741 100%);
+        color: var(--text-light);
+        display: flex; justify-content: center; align-items: center;
+        min-height: 100vh; width: 100%; overflow: hidden; position: relative;
+    }
+
+    /* Cielo nocturno con el Relámpago del Catatumbo */
+    #skyCanvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
+
+    /* Silueta del lago y los palafitos */
+    .lake-silhouette { position: absolute; bottom: 0; left: 0; right: 0; height: 28vh; z-index: 1; pointer-events: none; }
+
+    .loader-wrapper {
+        position: relative; z-index: 2;
+        text-align: center; display: flex; flex-direction: column; align-items: center; gap: 18px;
+        width: 90%; max-width: 340px; padding: 20px;
+    }
+
+    .logo-container { width: 130px; filter: drop-shadow(0 0 18px rgba(224,169,53,0.25)); }
+    .loader-logo { width: 100%; height: auto; object-fit: contain; background: rgba(255,255,255,0.96); border-radius: 16px; padding: 6px; }
+
+    /* Patacón giratorio como loader principal */
+    .patacon-loader { width: 64px; height: 64px; margin-top: 4px; }
+    .patacon {
+        width: 64px; height: 64px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 30%, #f7da8a, #b8871f 60%, #a96e07 100%);
+        border: 3px solid #8a5a05;
+        animation: flipPatacon 1.3s infinite ease-in-out;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+    }
+    @keyframes flipPatacon {
+        0%   { transform: rotateY(0deg) translateY(0); }
+        50%  { transform: rotateY(180deg) translateY(-6px); }
+        100% { transform: rotateY(360deg) translateY(0); }
+    }
+
+    .loader-bar-bg { width: 100%; height: 6px; background-color: rgba(255,255,255,0.12); border-radius: 10px; overflow: hidden; margin-top: 2px; }
+    .loader-bar-fill {
+        height: 100%; width: 0%; border-radius: 10px;
+        background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-light));
+        box-shadow: 0 0 12px rgba(224,169,53,0.6);
+        animation: fillBar 2.8s cubic-bezier(0.4,0,0.2,1) forwards;
+    }
+    @keyframes fillBar { 0% { width: 0%; } 100% { width: 100%; } }
+
+    .loader-status { font-size: 0.92rem; color: var(--text-muted); font-weight: 700; margin-top: -2px; min-height: 1.3em; }
+    .loader-subtitle { font-size: 0.72rem; color: rgba(234,242,255,0.55); font-weight: 600; letter-spacing: 0.3px; }
+</style>
+</head>
+<body>
+
+<canvas id="skyCanvas"></canvas>
+
+<!-- Silueta de palafitos sobre el Lago de Maracaibo -->
+<svg class="lake-silhouette" viewBox="0 0 800 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="120" width="800" height="40" fill="#061528"></rect>
+    <g fill="#08203f">
+        <rect x="40" y="80" width="60" height="50"></rect>
+        <polygon points="30,80 70,55 110,80"></polygon>
+        <rect x="60" y="125" width="6" height="20"></rect>
+        <rect x="95" y="125" width="6" height="20"></rect>
+
+        <rect x="170" y="95" width="55" height="40"></rect>
+        <polygon points="160,95 197,72 234,95"></polygon>
+        <rect x="180" y="130" width="6" height="18"></rect>
+        <rect x="210" y="130" width="6" height="18"></rect>
+
+        <rect x="300" y="85" width="65" height="48"></rect>
+        <polygon points="290,85 332,58 374,85"></polygon>
+        <rect x="312" y="130" width="6" height="20"></rect>
+        <rect x="350" y="130" width="6" height="20"></rect>
+
+        <rect x="460" y="98" width="50" height="38"></rect>
+        <polygon points="452,98 485,76 518,98"></polygon>
+        <rect x="470" y="132" width="6" height="16"></rect>
+        <rect x="498" y="132" width="6" height="16"></rect>
+
+        <rect x="580" y="82" width="60" height="50"></rect>
+        <polygon points="570,82 610,55 650,82"></polygon>
+        <rect x="592" y="128" width="6" height="20"></rect>
+        <rect x="624" y="128" width="6" height="20"></rect>
+
+        <rect x="700" y="92" width="55" height="42"></rect>
+        <polygon points="690,92 727,68 764,92"></polygon>
+        <rect x="712" y="130" width="6" height="18"></rect>
+        <rect x="745" y="130" width="6" height="18"></rect>
+    </g>
+</svg>
+
+<div class="loader-wrapper">
+    <div class="logo-container">
+        <img src="logo_fixio.png" alt="Fixio" class="loader-logo">
+    </div>
+
+    <div class="patacon-loader"><div class="patacon"></div></div>
+
+    <div class="loader-bar-bg"><div class="loader-bar-fill" id="progressBar"></div></div>
+    <p class="loader-status" id="statusText">Verificando credenciales...</p>
+    <p class="loader-subtitle">Iluminado por el espíritu zuliano</p>
+</div>
+
+<script>
+/* ===========================================================
+   ANIMACIÓN: RELÁMPAGO DEL CATATUMBO sobre el cielo nocturno
+   =========================================================== */
+const canvas = document.getElementById('skyCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const estrellas = Array.from({ length: 70 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height * 0.6,
+    r: Math.random() * 1.4 + 0.3,
+    parpadeo: Math.random() * Math.PI * 2
+}));
+
+function dibujarEstrellas(t) {
+    estrellas.forEach(e => {
+        const brillo = 0.4 + 0.6 * Math.abs(Math.sin(t / 800 + e.parpadeo));
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(234, 242, 255, ${brillo * 0.7})`;
+        ctx.fill();
+    });
+}
+
+function generarRayo(x0, y0, x1, y1, desviacion) {
+    if (desviacion < 4) return [[x0, y0], [x1, y1]];
+    const mx = (x0 + x1) / 2 + (Math.random() - 0.5) * desviacion;
+    const my = (y0 + y1) / 2 + (Math.random() - 0.5) * desviacion * 0.4;
+    return [
+        ...generarRayo(x0, y0, mx, my, desviacion / 2),
+        ...generarRayo(mx, my, x1, y1, desviacion / 2)
+    ];
+}
+
+function dibujarRayo(puntos, alpha) {
+    ctx.beginPath();
+    ctx.moveTo(puntos[0][0], puntos[0][1]);
+    puntos.forEach(p => ctx.lineTo(p[0], p[1]));
+    ctx.strokeStyle = `rgba(247, 229, 168, ${alpha})`;
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = 'rgba(224, 169, 53, 0.9)';
+    ctx.shadowBlur = 18;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    puntos.forEach((p, i) => {
+        if (i % 4 === 0 && Math.random() > 0.5) {
+            const ramaX = p[0] + (Math.random() - 0.5) * 60;
+            const ramaY = p[1] + Math.random() * 40;
+            ctx.beginPath();
+            ctx.moveTo(p[0], p[1]);
+            ctx.lineTo(ramaX, ramaY);
+            ctx.strokeStyle = `rgba(247, 229, 168, ${alpha * 0.6})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+    });
+}
+
+let proximoRayo = 600;
+let relampagoActivo = null;
+let flashAlpha = 0;
+
+function actualizarRelampagos(dt) {
+    proximoRayo -= dt;
+    if (proximoRayo <= 0 && !relampagoActivo) {
+        const xBase = canvas.width * (0.25 + Math.random() * 0.5);
+        const puntos = generarRayo(xBase, 0, xBase + (Math.random() - 0.5) * 120, canvas.height * 0.62, 90);
+        relampagoActivo = { puntos, vida: 220, edad: 0 };
+        flashAlpha = 0.35;
+        proximoRayo = 900 + Math.random() * 1400;
+    }
+}
+
+function dibujarFrame(t, dt) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (flashAlpha > 0.01) {
+        ctx.fillStyle = `rgba(120, 150, 220, ${flashAlpha * 0.25})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height * 0.7);
+        flashAlpha *= 0.9;
+    }
+
+    dibujarEstrellas(t);
+
+    if (relampagoActivo) {
+        relampagoActivo.edad += dt;
+        const progreso = relampagoActivo.edad / relampagoActivo.vida;
+        const alpha = progreso < 0.5 ? 1 : Math.max(0, 1 - (progreso - 0.5) * 2);
+        dibujarRayo(relampagoActivo.puntos, alpha);
+        if (relampagoActivo.edad > relampagoActivo.vida) relampagoActivo = null;
+    }
+
+    actualizarRelampagos(dt);
+}
+
+let last = performance.now();
+function loop(now) {
+    const dt = now - last;
+    last = now;
+    dibujarFrame(now, dt);
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ===========================================================
+   LÓGICA DE SESIÓN Y REDIRECCIÓN
+   =========================================================== */
+document.addEventListener("DOMContentLoaded", () => {
+    const statusText = document.getElementById('statusText');
+    const token = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
+    const rol = localStorage.getItem('userRol') || sessionStorage.getItem('userRol');
+
+    if (!token) {
+        statusText.innerText = "Acceso denegado. Redirigiendo...";
+        setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+        return;
+    }
+
+    setTimeout(() => { statusText.innerText = "Iluminando tu panel, como el Catatumbo..."; }, 900);
+    setTimeout(() => {
+        if (rol === 'admin') {
+            statusText.innerText = "Abriendo el Centro de Control...";
+        } else {
+            statusText.innerText = rol === 'trabajador'
+                ? "Buscando solicitudes cercanas..."
+                : "Preparando tu panel de servicios...";
+        }
+    }, 1900);
+
+    setTimeout(() => {
+        let destino = 'cliente.html';
+        if (rol === 'trabajador') destino = 'trabajador.html';
+        if (rol === 'admin') destino = 'admin.html';
+        window.location.href = destino;
+    }, 2900);
+});
+</script>
+</body>
+</html>

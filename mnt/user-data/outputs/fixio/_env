@@ -1,0 +1,36 @@
+# ==========================================================================
+# CONFIGURACIÓN DE ENTORNO - FIXIO
+# IMPORTANTE: este archivo debe llamarse exactamente ".env" (con punto inicial)
+# ==========================================================================
+PORT=5500
+NODE_ENV=development
+
+# Deja '*' solo en desarrollo. En producción escribe tu dominio real.
+ALLOWED_ORIGINS=*
+
+# Base de Datos
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=
+# Nombre interno de la BD (puedes mantenerlo aunque la marca ahora sea Fixio)
+DB_NAME=tuservicioexpress
+
+# Seguridad
+JWT_SECRET=cambia_esta_clave_super_secreta_2026
+
+# Cuenta que será promovida a administrador automáticamente al arrancar
+ADMIN_EMAIL=Espinaandres23@gmail.com
+
+# Google Maps (opcional). Si dejas esto vacío, la app usa OpenStreetMap (Leaflet).
+# Obtén tu clave en https://console.cloud.google.com (Maps JavaScript API)
+GOOGLE_MAPS_API_KEY=
+
+# Notificaciones por Telegram (opcional)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+# Almacenamiento opcional en la nube (vacío = almacenamiento local)
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=

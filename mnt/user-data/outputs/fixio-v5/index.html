@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0a3a61">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acceso - Fixio</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+    (function() {
+        const prefSis = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('themePreference') || prefSis);
+    })();
+</script>
+<style>
+    :root {
+        --brand-blue: #0a3a61;
+        --brand-blue-dark: #062741;
+        --brand-yellow: #e0a935;
+        --brand-yellow-dark: #b8871f;
+        --brand-gradient: linear-gradient(135deg, #0a3a61 0%, #062741 100%);
+        --accent-gradient: linear-gradient(135deg, #e0a935 0%, #b8871f 100%);
+        --text-dark: #1e293b;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --input-bg: #f8fafc;
+        --card-bg: #ffffff;
+        --chip-bg: #ffffff;
+        --bg-outside: #1e293b; /* Fondo exterior oscuro como en la referencia */
+    }
+    html[data-theme="dark"] {
+        --brand-blue: #6ba3f5;
+        --brand-blue-dark: #0a3a61;
+        --text-dark: #e8eefc;
+        --text-muted: #9fb0d0;
+        --border-color: rgba(255,255,255,0.12);
+        --input-bg: #182238;
+        --card-bg: #141d33;
+        --chip-bg: #1e2a47;
+        --bg-outside: #060c1c;
+        color-scheme: dark;
+    }
+    /* Botón flotante de tema */
+    .theme-float-btn {
+        position: fixed; top: 18px; right: 18px; z-index: 50;
+        width: 42px; height: 42px; border-radius: 50%; border: none; cursor: pointer;
+        background: rgba(255,255,255,0.12); color: #fff; backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+    }
+    .theme-float-btn:hover { background: rgba(255,255,255,0.22); transform: rotate(15deg); }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+        font-family: 'Nunito', sans-serif;
+        color: var(--text-dark);
+        min-height: 100vh;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: var(--bg-outside);
+        padding: 20px;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* TARJETA FLOTANTE PRINCIPAL */
+    .auth-container {
+        display: flex;
+        width: 100%;
+        max-width: 1080px;
+        height: 680px; /* Altura fija para mantener proporción elegante */
+        background: var(--card-bg);
+        border-radius: 32px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+        animation: scaleUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes scaleUp { 
+        from { opacity: 0; transform: translateY(30px) scale(0.95); } 
+        to { opacity: 1; transform: translateY(0) scale(1); } 
+    }
+
+    /* LADO IZQUIERDO: Formulario */
+    .auth-form-side {
+        flex: 1;
+        padding: 3rem 4rem;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        /* Ocultar scrollbar visualmente pero permitir scroll */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .auth-form-side::-webkit-scrollbar {
+        display: none;
+    }
+
+    .brand-header { 
+        margin-bottom: 2rem; 
+    }
+    .brand-logo { 
+        height: 70px; 
+        width: auto; 
+        object-fit: contain; 
+        background: #fff; border-radius: 14px; padding: 6px 12px;
+    }
+
+    /* Selector de Roles estilo Píldora Moderna */
+    .role-toggle {
+        display: flex;
+        background: var(--input-bg);
+        border-radius: 20px;
+        padding: 6px;
+        margin-bottom: 2rem;
+        border: 1px solid var(--border-color);
+    }
+    .role-btn {
+        flex: 1;
+        padding: 0.8rem;
+        border: none;
+        background: transparent;
+        border-radius: 14px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .role-btn:hover:not(.active) { color: var(--text-dark); }
+    .role-btn.active.cliente { 
+        background: var(--brand-blue); 
+        color: #fff; 
+        box-shadow: 0 4px 12px rgba(10, 58, 97, 0.25); 
+    }
+    .role-btn.active.trabajador { 
+        background: var(--brand-yellow); 
+        color: #1e293b; 
+        box-shadow: 0 4px 12px rgba(224, 169, 53, 0.3); 
+    }
+
+    /* Títulos del form */
+    .auth-form-side h2 { 
+        margin-bottom: 0.3rem; 
+        font-weight: 800; 
+        font-size: 1.8rem; 
+        color: var(--text-dark); 
+        letter-spacing: -0.5px;
+    }
+    .role-subtitle { 
+        color: var(--text-muted); 
+        font-size: 0.95rem; 
+        font-weight: 500; 
+        margin-bottom: 2rem; 
+    }
+    
+    /* Campos del formulario altamente redondeados */
+    .form-group { 
+        margin-bottom: 1.2rem; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 8px; 
+    }
+    .form-row { display: flex; gap: 16px; width: 100%; }
+    .form-row .form-group { flex: 1; }
+
+    .form-group label { 
+        font-size: 0.85rem; 
+        color: var(--text-dark); 
+        font-weight: 700; 
+        margin-left: 4px;
+    }
+    .form-input {
+        width: 100%; 
+        padding: 0.9rem 1.2rem; 
+        background-color: var(--input-bg);
+        border: 1.5px solid var(--border-color); 
+        border-radius: 16px; /* Super redondeado */
+        color: var(--text-dark); 
+        font-size: 0.95rem; 
+        font-family: inherit; 
+        outline: none;
+        transition: all 0.25s ease;
+    }
+    .form-input::placeholder { color: #94a3b8; font-weight: 500; }
+    .form-input:hover { border-color: #cbd5e1; }
+    .form-input:focus { 
+        border-color: var(--brand-blue); 
+        background-color: var(--card-bg); 
+        box-shadow: 0 0 0 4px rgba(10, 58, 97, 0.1); 
+    }
+
+    /* Grid de especialidades (selección múltiple en el registro de trabajadores) */
+    .oficios-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        max-height: 180px;
+        overflow-y: auto;
+        padding: 4px;
+        border: 1.5px solid var(--border-color);
+        border-radius: 16px;
+        background: var(--input-bg);
+    }
+    .oficio-chip {
+        display: flex; align-items: center; gap: 8px;
+        padding: 10px 12px; border-radius: 12px; cursor: pointer;
+        font-size: 0.85rem; font-weight: 700; color: var(--text-muted);
+        border: 1.5px solid transparent; transition: all 0.2s; background: var(--chip-bg);
+    }
+    .oficio-chip:hover { border-color: #cbd5e1; }
+    .oficio-chip input { accent-color: var(--brand-yellow-dark); width: 16px; height: 16px; cursor: pointer; }
+    .oficio-chip:has(input:checked) { border-color: var(--brand-yellow); background: rgba(224,169,53,0.12); color: var(--text-dark); }
+
+    .password-container { position: relative; display: flex; align-items: center; }
+    .password-container .form-input { padding-right: 3rem; }
+    .toggle-password-btn { 
+        position: absolute; 
+        right: 16px; 
+        background: none; 
+        border: none; 
+        cursor: pointer; 
+        color: #94a3b8; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        transition: color 0.2s ease;
+    }
+    .toggle-password-btn:hover { color: var(--brand-blue); }
+
+    /* Botón Principal */
+    .submit-btn {
+        background: var(--brand-blue); 
+        color: #fff; 
+        border: none; 
+        padding: 1rem;
+        border-radius: 16px; 
+        font-weight: 800; 
+        font-size: 1rem; 
+        cursor: pointer; 
+        width: 100%;
+        margin-top: 1rem; 
+        box-shadow: 0 8px 20px rgba(10, 58, 97, 0.25); 
+        transition: all 0.3s ease;
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        gap: 8px;
+    }
+    .submit-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 25px rgba(10, 58, 97, 0.35);
+        background: var(--brand-blue-dark);
+    }
+    .submit-btn:active:not(:disabled) { transform: translateY(0); }
+
+    .submit-btn.trabajador-mode { 
+        background: var(--brand-yellow); 
+        color: #1e293b; 
+        box-shadow: 0 8px 20px rgba(224, 169, 53, 0.3); 
+    }
+    .submit-btn.trabajador-mode:hover:not(:disabled) {
+        background: var(--brand-yellow-dark);
+        box-shadow: 0 12px 25px rgba(224, 169, 53, 0.4);
+    }
+    .submit-btn:disabled { 
+        background: #e2e8f0; cursor: not-allowed; color: #94a3b8; box-shadow: none; 
+    }
+
+    /* Enlaces y Checkbox */
+    .forgot-row { text-align: right; margin-top: -4px; margin-bottom: 10px; }
+    .forgot-row a { 
+        font-size: 0.85rem; 
+        color: var(--brand-blue); 
+        text-decoration: none; 
+        font-weight: 700; 
+        cursor: pointer; 
+    }
+    .forgot-row a:hover { text-decoration: underline; }
+    
+    .keep-row { 
+        display: flex; align-items: center; gap: 10px; 
+        font-size: 0.9rem; color: var(--text-muted); font-weight: 600; cursor: pointer;
+    }
+    .keep-row input[type="checkbox"] {
+        width: 18px; height: 18px; border-radius: 6px; accent-color: var(--brand-blue); cursor: pointer;
+    }
+
+    .toggle-link { 
+        margin-top: 2rem; text-align: center; font-size: 0.95rem; color: var(--text-muted); font-weight: 500; 
+    }
+    .toggle-link a { 
+        color: var(--brand-blue); text-decoration: none; font-weight: 800; cursor: pointer; margin-left: 5px;
+    }
+    .toggle-link a:hover { text-decoration: underline; }
+
+    /* LADO DERECHO: Visual con gradiente fluido simulado */
+    .auth-visual-side {
+        flex: 1;
+        background: var(--brand-blue-dark);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 4rem;
+        color: #ffffff;
+    }
+
+    /* Efectos de Blur para simular el fondo fluido de la referencia */
+    .auth-visual-side::before {
+        content: '';
+        position: absolute;
+        top: -15%;
+        left: -15%;
+        width: 450px;
+        height: 450px;
+        background: var(--brand-yellow);
+        filter: blur(120px);
+        opacity: 0.4;
+        border-radius: 50%;
+        z-index: 1;
+    }
+    .auth-visual-side::after {
+        content: '';
+        position: absolute;
+        bottom: -20%;
+        right: -10%;
+        width: 550px;
+        height: 550px;
+        background: #4fd1c5; /* Toque cyan para modernidad fluida */
+        filter: blur(140px);
+        opacity: 0.3;
+        border-radius: 50%;
+        z-index: 1;
+    }
+
+    .visual-content {
+        position: relative;
+        z-index: 2;
+        max-width: 450px;
+        animation: fadeInLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes fadeInLeft {
+        from { opacity: 0; transform: translateX(30px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    .visual-title {
+        font-size: 3.5rem;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-bottom: 1.5rem;
+        letter-spacing: -1.5px;
+    }
+    .visual-title span { color: var(--brand-yellow); }
+
+    .visual-description {
+        font-size: 1.15rem;
+        color: rgba(255, 255, 255, 0.9);
+        line-height: 1.6;
+        font-weight: 400;
+    }
+
+    /* Mensajes de Alerta */
+    .message { 
+        margin-bottom: 1.5rem; padding: 1rem; border-radius: 12px; font-size: 0.9rem; font-weight: 700; 
+        display: none; align-items: center; gap: 10px; animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    .message.success { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+    .message.error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+    /* RESPONSIVIDAD */
+    @media (max-width: 968px) {
+        .auth-container {
+            flex-direction: column;
+            height: auto;
+            max-width: 500px;
+        }
+        .auth-visual-side {
+            display: none; /* Se oculta en móviles para priorizar el formulario */
+        }
+        .auth-form-side {
+            padding: 2.5rem 2rem;
+        }
+    }
+</style>
+</head>
+<body>
+
+<button class="theme-float-btn" onclick="alternarTema()" title="Cambiar tema">
+    <i data-lucide="moon" id="themeIcon" style="width: 20px; height: 20px;"></i>
+</button>
+
+<div class="auth-container">
+    
+    <!-- LADO IZQUIERDO: Formulario (Fondo Blanco) -->
+    <div class="auth-form-side">
+        <div class="brand-header">
+            <img src="logo_fixio.png" alt="Fixio" class="brand-logo">
+        </div>
+
+        <!-- Selector de Roles Píldora -->
+        <div class="role-toggle">
+            <button type="button" class="role-btn cliente active" id="btnRoleCliente">
+                <i data-lucide="user" style="width: 18px; height: 18px;"></i> Cliente
+            </button>
+            <button type="button" class="role-btn trabajador" id="btnRoleTrabajador">
+                <i data-lucide="briefcase" style="width: 18px; height: 18px;"></i> Trabajador
+            </button>
+        </div>
+
+        <h2 id="formTitle">Bienvenido.</h2>
+        <p id="formSubtitle" class="role-subtitle">Ingresa a tu cuenta para continuar</p>
+        
+        <div class="message" id="messageBox"></div>
+
+        <form id="authForm">
+            <div id="registerFields" style="display:none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <input type="text" class="form-input" id="nombre" placeholder="Ej. Juan">
+                    </div>
+                    <div class="form-group">
+                        <label>Apellido</label>
+                        <input type="text" class="form-input" id="apellido" placeholder="Ej. Pérez">
+                    </div>
+                </div>
+                <div class="form-group" id="oficioField" style="display:none;">
+                    <label>Oficios / Especialidades <span style="font-weight:500; color:var(--text-muted);">(puedes elegir varias)</span></label>
+                    <div id="oficiosGrid" class="oficios-grid">
+                        <span style="font-size:0.85rem; color:var(--text-muted);">Cargando especialidades...</span>
+                    </div>
+                </div>
+
+                <label id="terminosField" style="display:flex; align-items:flex-start; gap:10px; font-size:0.82rem; font-weight:600; color:var(--text-muted); margin-bottom:14px; cursor:pointer;">
+                    <input type="checkbox" id="aceptaTerminos" style="accent-color: var(--brand-yellow-dark); width:17px; height:17px; margin-top:2px; flex-shrink:0;">
+                    <span>He leído y acepto los <a href="terminos.html" target="_blank" style="color: var(--brand-blue); font-weight:800;">Términos de Uso y la Política de Privacidad</a> de Fixio.</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>Correo electrónico</label>
+                <input type="email" class="form-input" id="email" placeholder="correo@ejemplo.com" required>
+            </div>
+
+            <div class="form-group" id="passwordFieldGroup">
+                <label>Contraseña</label>
+                <div class="password-container">
+                    <input type="password" class="form-input" id="password" placeholder="••••••••" required>
+                    <p id="passHint" style="display:none; font-size:0.72rem; color:var(--text-muted); font-weight:700; margin-top:6px;">Mínimo 8 caracteres, combinando letras y números.</p>
+                    <button type="button" class="toggle-password-btn" id="togglePassword"></button>
+                </div>
+            </div>
+
+            <div class="form-group" id="codigoField" style="display:none;">
+                <label>Código de verificación</label>
+                <input type="text" class="form-input" id="codigo" placeholder="Código recibido por correo">
+            </div>
+
+            <div class="forgot-row" id="forgotPasswordGroup">
+                <a id="forgotPasswordLink">¿Olvidaste tu contraseña?</a>
+            </div>
+
+            <div class="form-group">
+                <label class="keep-row"><input type="checkbox" id="keepSigned"> Mantener sesión iniciada</label>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">Ingresar</button>
+        </form>
+
+        <div class="toggle-link">
+            <span id="toggleText">¿No tienes cuenta?</span>
+            <a id="toggleAction">Regístrate ahora</a>
+        </div>
+    </div>
+
+    <!-- LADO DERECHO: Panel Visual Fluido -->
+    <div class="auth-visual-side">
+        <div class="visual-content">
+            <h1 class="visual-title">Soluciones rápidas a un <span>solo clic.</span></h1>
+            <p class="visual-description">
+                Conecta inmediatamente con profesionales calificados listos para atender tus requerimientos cotidianos con la mayor velocidad, seguridad y confianza.
+            </p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    lucide.createIcons(); // Inicializar iconos
+
+    // --- MODO OSCURO / CLARO ---
+    function aplicarIconoTema() {
+        const tema = document.documentElement.getAttribute('data-theme') || 'light';
+        const icono = document.getElementById('themeIcon');
+        if (icono) icono.setAttribute('data-lucide', tema === 'dark' ? 'sun' : 'moon');
+        lucide.createIcons();
+    }
+    window.alternarTema = function() {
+        const nuevo = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', nuevo);
+        localStorage.setItem('themePreference', nuevo);
+        aplicarIconoTema();
+    };
+    aplicarIconoTema();
+
+    const iconEye = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    const iconEyeOff = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+    const iconError = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+    const iconSuccess = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+
+    let currentMode = 'login';
+    let currentRole = 'cliente'; // cliente | trabajador
+
+    const formTitle = document.getElementById('formTitle');
+    const formSubtitle = document.getElementById('formSubtitle');
+    const submitBtn = document.getElementById('submitBtn');
+    const toggleText = document.getElementById('toggleText');
+    const toggleAction = document.getElementById('toggleAction');
+    const authForm = document.getElementById('authForm');
+    const messageBox = document.getElementById('messageBox');
+
+    const registerFields = document.getElementById('registerFields');
+    const oficioField = document.getElementById('oficioField');
+    const passwordFieldGroup = document.getElementById('passwordFieldGroup');
+    const codigoField = document.getElementById('codigoField');
+    const forgotPasswordGroup = document.getElementById('forgotPasswordGroup');
+
+    const nombreInput = document.getElementById('nombre');
+    const apellidoInput = document.getElementById('apellido');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const codigoInput = document.getElementById('codigo');
+    const oficiosGrid = document.getElementById('oficiosGrid');
+    function obtenerOficiosSeleccionados() {
+        return [...document.querySelectorAll('.chk-oficio:checked')].map(c => parseInt(c.value));
+    }
+
+    const togglePasswordBtn = document.getElementById('togglePassword');
+    const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+    const btnRoleCliente = document.getElementById('btnRoleCliente');
+    const btnRoleTrabajador = document.getElementById('btnRoleTrabajador');
+
+    togglePasswordBtn.innerHTML = iconEye;
+
+    function applyRoleStyle() {
+        if (currentRole === 'trabajador') {
+            btnRoleTrabajador.classList.add('active');
+            btnRoleCliente.classList.remove('active');
+            submitBtn.classList.add('trabajador-mode');
+            oficioField.style.display = currentMode === 'register' ? 'block' : 'none';
+            formTitle.innerText = currentMode === 'login' ? 'Hola, Profesional.' : 'Únete como Experto';
+            formSubtitle.innerText = currentMode === 'login' ? 'Ingresa para gestionar tus servicios' : 'Ofrece tus servicios y genera ingresos';
+        } else {
+            btnRoleCliente.classList.add('active');
+            btnRoleTrabajador.classList.remove('active');
+            submitBtn.classList.remove('trabajador-mode');
+            oficioField.style.display = 'none';
+            formTitle.innerText = currentMode === 'login' ? 'Bienvenido.' : 'Crea tu cuenta';
+            formSubtitle.innerText = currentMode === 'login' ? 'Ingresa a tu cuenta para continuar' : 'Encuentra los mejores servicios rápidos';
+        }
+    }
+
+    btnRoleCliente.addEventListener('click', () => { currentRole = 'cliente'; applyRoleStyle(); });
+    btnRoleTrabajador.addEventListener('click', () => { currentRole = 'trabajador'; applyRoleStyle(); });
+
+    togglePasswordBtn.addEventListener('click', () => {
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            togglePasswordBtn.innerHTML = iconEyeOff;
+        } else {
+            passwordInput.type = 'password';
+            togglePasswordBtn.innerHTML = iconEye;
+        }
+    });
+
+    forgotPasswordLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        messageBox.style.display = 'none';
+        currentMode = 'forgot';
+        formTitle.innerText = 'Recuperar Acceso';
+        formSubtitle.innerText = 'Te enviaremos un código a tu correo';
+        submitBtn.innerText = 'Enviar Código';
+        registerFields.style.display = 'none';
+            document.getElementById('passHint').style.display = 'none';
+        oficioField.style.display = 'none';
+        passwordFieldGroup.style.display = 'none';
+        forgotPasswordGroup.style.display = 'none';
+        codigoField.style.display = 'none';
+        passwordInput.required = false;
+        toggleText.innerText = '¿Recordaste tu contraseña?';
+        toggleAction.innerText = 'Inicia sesión';
+    });
+
+    toggleAction.addEventListener('click', () => {
+        messageBox.style.display = 'none';
+        authForm.reset();
+        passwordInput.type = 'password';
+        togglePasswordBtn.innerHTML = iconEye;
+        codigoField.style.display = 'none';
+        passwordFieldGroup.style.display = 'block';
+        forgotPasswordGroup.style.display = 'block';
+        passwordInput.required = true;
+
+        if (currentMode === 'login' || currentMode === 'forgot' || currentMode === 'reset' || currentMode === 'verify') {
+            currentMode = 'register';
+            submitBtn.innerText = 'Registrarse';
+            toggleText.innerText = '¿Ya tienes cuenta?';
+            toggleAction.innerText = 'Inicia sesión';
+            registerFields.style.display = 'block';
+            document.getElementById('passHint').style.display = 'block';
+            forgotPasswordGroup.style.display = 'none';
+            nombreInput.required = true;
+            apellidoInput.required = true;
+            applyRoleStyle(); 
+        } else {
+            currentMode = 'login';
+            submitBtn.innerText = 'Ingresar';
+            toggleText.innerText = '¿No tienes cuenta?';
+            toggleAction.innerText = 'Regístrate ahora';
+            registerFields.style.display = 'none';
+            document.getElementById('passHint').style.display = 'none';
+            oficioField.style.display = 'none';
+            nombreInput.required = false;
+            apellidoInput.required = false;
+            applyRoleStyle(); 
+        }
+    });
+
+    authForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const email = emailInput.value;
+        const password = passwordInput.value;
+        const codigo = codigoInput.value;
+
+        messageBox.style.display = 'none';
+        submitBtn.disabled = true;
+
+        const API_URL = 'http://localhost:5500/api';
+        let endpoint = '';
+        let payload = { email, rol: currentRole };
+
+        if (currentMode === 'login') {
+            endpoint = `${API_URL}/login`;
+            payload.password = password;
+        } else if (currentMode === 'register') {
+            endpoint = `${API_URL}/register`;
+            payload.password = password;
+            payload.nombre = nombreInput.value;
+            payload.apellido = apellidoInput.value;
+            // Aceptación de términos obligatoria para crear la cuenta
+            const chkTerminos = document.getElementById('aceptaTerminos');
+            if (chkTerminos && !chkTerminos.checked) {
+                messageBox.innerHTML = `${iconError} <span>Debes aceptar los Términos y la Política de Privacidad.</span>`;
+                messageBox.className = 'message error';
+                messageBox.style.display = 'flex';
+                submitBtn.disabled = false;
+                return;
+            }
+
+            if (currentRole === 'trabajador') {
+                const seleccionados = obtenerOficiosSeleccionados();
+                if (seleccionados.length === 0) {
+                    messageBox.innerHTML = `${iconError} <span>Selecciona al menos una especialidad.</span>`;
+                    messageBox.className = 'message error';
+                    messageBox.style.display = 'flex';
+                    submitBtn.disabled = false;
+                    return;
+                }
+                payload.oficios = seleccionados;
+            }
+        } else if (currentMode === 'verify') {
+            endpoint = `${API_URL}/verify-email`;
+            payload.codigo = codigo;
+        } else if (currentMode === 'forgot') {
+            endpoint = `${API_URL}/forgot-password`;
+        } else if (currentMode === 'reset') {
+            endpoint = `${API_URL}/reset-password`;
+            payload.token = codigo;
+            payload.newPassword = password;
+        }
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                messageBox.innerHTML = `${iconSuccess} <span>${data.message}</span>`;
+                messageBox.className = 'message success';
+                messageBox.style.display = 'flex';
+
+                if (currentMode === 'register') {
+                    currentMode = 'verify';
+                    formTitle.innerText = 'Ingresa tu Código';
+                    formSubtitle.innerText = 'Verifica tu bandeja de entrada';
+                    submitBtn.innerText = 'Verificar';
+                    registerFields.style.display = 'none';
+            document.getElementById('passHint').style.display = 'none';
+                    oficioField.style.display = 'none';
+                    passwordFieldGroup.style.display = 'none';
+                    codigoField.style.display = 'block';
+                    codigoInput.required = true;
+                    passwordInput.required = false;
+                }
+                else if (currentMode === 'forgot') {
+                    currentMode = 'reset';
+                    formTitle.innerText = 'Nueva Contraseña';
+                    formSubtitle.innerText = 'Crea una contraseña segura';
+                    submitBtn.innerText = 'Restablecer';
+                    codigoField.style.display = 'block';
+                    passwordFieldGroup.style.display = 'block';
+                    codigoInput.required = true;
+                    passwordInput.required = true;
+                }
+                else if (currentMode === 'verify' || currentMode === 'reset') {
+                    setTimeout(() => {
+                        toggleAction.click();
+                        emailInput.value = email;
+                        passwordInput.value = '';
+                        codigoInput.value = '';
+                    }, 2000);
+                }
+                else if (currentMode === 'login') {
+                    const keepSigned = document.getElementById('keepSigned').checked;
+                    const store = keepSigned ? localStorage : sessionStorage;
+                    store.setItem('userToken', data.token);
+                    store.setItem('userRol', data.rol);
+
+                    setTimeout(() => {
+                        window.location.href = 'carga.html';
+                    }, 800);
+                }
+            } else {
+                messageBox.innerHTML = `${iconError} <span>${data.message || 'Error en la solicitud.'}</span>`;
+                messageBox.className = 'message error';
+                messageBox.style.display = 'flex';
+            }
+        } catch (error) {
+            messageBox.innerHTML = `${iconError} <span>Error de conexión con el servidor.</span>`;
+            messageBox.className = 'message error';
+            messageBox.style.display = 'flex';
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+
+    // Cargar las categorías reales de la BD como opciones múltiples de especialidad
+    (async function cargarOficios() {
+        try {
+            const res = await fetch('http://localhost:5500/api/categorias');
+            const categorias = await res.json();
+            oficiosGrid.innerHTML = categorias.map(c => `
+                <label class="oficio-chip">
+                    <input type="checkbox" class="chk-oficio" value="${c.id}">
+                    <span>${c.nombre}</span>
+                </label>
+            `).join('');
+        } catch (e) {
+            oficiosGrid.innerHTML = '<span style="font-size:0.85rem; color:#dc2626;">Error al cargar (revisa el servidor)</span>';
+        }
+    })();
+</script>
+</body>
+</html>

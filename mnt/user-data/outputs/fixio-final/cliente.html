@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0a3a61">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fixio - Panel Cliente</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="/socket.io/socket.io.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // Aplicar el tema guardado ANTES de pintar la página (evita el "flash" blanco)
+    (function() {
+        const preferenciaSistema = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        const temaGuardado = localStorage.getItem('themePreference') || preferenciaSistema;
+        document.documentElement.setAttribute('data-theme', temaGuardado);
+    })();
+</script>
+<style>
+    :root {
+        /* Cambio a tonalidad Azul */
+        --brand-main: #0a3a61; 
+        --brand-main-dark: #062741;
+        --brand-yellow: #e0a935; 
+        --brand-yellow-dark: #b8871f;
+        --brand-gradient: linear-gradient(135deg, #0a3a61 0%, #062741 100%);
+        --accent-gradient: linear-gradient(135deg, #e0a935 0%, #b8871f 100%);
+        --card-bg: #ffffff;
+        --text-dark: #1e293b; 
+        --text-muted: #64748b;
+        --border-color: rgba(0,0,0,0.07); 
+        --danger: #ef4444;
+        /* Superficies secundarias (antes hardcodeadas) */
+        --bg-body: linear-gradient(to bottom, #ffffff 0%, #ffffff 70%, #f5f7fb 100%);
+        --surface-soft: #f1f5f9;     /* chips, botones secundarios, iconos */
+        --surface-softer: #f8fafc;   /* inputs, hover de menú */
+        --surface-card2: #fafbfc;    /* tarjetas internas (ofertas, listas) */
+        --surface-hover: #e2e8f0;
+        --success-text: #15803d;
+        --shadow-color: var(--shadow-color);
+    }
+
+    /* ============ MODO OSCURO ============ */
+    html[data-theme="dark"] {
+        --brand-main: #6ba3f5;            /* azul más claro para contraste sobre fondo oscuro */
+        --brand-main-dark: #0a3a61;
+        --brand-yellow-dark: #e0a935;     /* el dorado oscuro no se lee en fondo oscuro */
+        --card-bg: #141d33;
+        --text-dark: #e8eefc;
+        --text-muted: #9fb0d0;
+        --border-color: rgba(255,255,255,0.10);
+        --bg-body: linear-gradient(to bottom, #0a1226 0%, #0c1730 70%, #0e1a36 100%);
+        --surface-soft: #1e2a47;
+        --surface-softer: #182238;
+        --surface-card2: #182238;
+        --surface-hover: #253355;
+        --success-text: #4ade80;
+        --danger: #f87171;
+        --shadow-color: rgba(0,0,0,0.35);
+        color-scheme: dark;
+    }
+
+    /* El mapa (OpenStreetMap) se oscurece con filtros para integrarse al tema */
+    html[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(190deg) brightness(0.9) contrast(0.9) saturate(0.7); }
+    html[data-theme="dark"] .leaflet-control-attribution { background: rgba(20,29,51,0.8); color: var(--text-muted); }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body { 
+        font-family: 'Nunito', sans-serif; 
+        /* Fondo adaptado a los tonos azules */
+        background: var(--bg-body); 
+        background-attachment: fixed;
+        color: var(--text-dark); 
+        min-height: 100vh; 
+        padding-bottom: 80px; 
+        transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    /* Barra Superior */
+    .topbar { background: var(--card-bg); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 10px var(--shadow-color); position: sticky; top: 0; z-index: 10; border-bottom: 3px solid var(--brand-main); }
+    .topbar .logo-row { display: flex; align-items: center; gap: 10px; }
+    .topbar img { height: 34px; background: #fff; border-radius: 8px; padding: 2px 6px; }
+    .topbar .greeting { font-weight: 800; font-size: 0.95rem; flex: 1; margin-left: 15px; }
+    .topbar .greeting span { color: var(--brand-main); }
+    
+    /* Avatar en Topbar */
+    .user-avatar-topbar { width: 38px; height: 38px; border-radius: 50%; background: var(--surface-soft); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1rem; color: var(--brand-main); cursor: pointer; overflow: hidden; border: 2px solid var(--border-color); transition: border-color 0.2s; }
+    .user-avatar-topbar:hover { border-color: var(--brand-main); }
+    .user-avatar-topbar img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* Vistas */
+    .app-view { display: none; animation: fadeIn 0.3s ease; }
+    .app-view.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .container { max-width: 720px; margin: 0 auto; padding: 18px; }
+    .section-title { font-size: 1rem; font-weight: 800; margin: 22px 0 12px; color: var(--text-dark); }
+
+    .hero-banner { background: var(--brand-gradient); color: #fff; border-radius: 18px; padding: 22px; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(10, 58, 97, 0.25); }
+    .hero-banner h1 { font-size: 1.3rem; font-weight: 800; margin-bottom: 4px; }
+    .hero-banner p { font-size: 0.88rem; opacity: 0.9; font-weight: 600; }
+
+    /* Servicios */
+    .services-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .service-card { background: var(--card-bg); border-radius: 14px; padding: 16px 8px; text-align: center; border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+    .service-card:hover, .service-card.selected { border-color: var(--brand-main); box-shadow: 0 6px 18px rgba(10, 58, 97, 0.15); transform: translateY(-2px); }
+    .service-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-soft); display: flex; align-items: center; justify-content: center; color: var(--brand-main); transition: all 0.2s; }
+    .service-card:hover .service-icon, .service-card.selected .service-icon { background: var(--brand-main); color: white; }
+    .service-card .name { font-size: 0.75rem; font-weight: 700; color: var(--text-dark); line-height: 1.1; }
+
+    /* Formularios y Botones */
+    .request-card { background: var(--card-bg); border-radius: 16px; padding: 18px; border: 1px solid var(--border-color); margin-top: 8px; display: none; }
+    .request-card.active { display: block; }
+    .form-group { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+    .form-input, textarea.form-input, select.form-input { width: 100%; padding: 0.7rem 1rem; background: var(--surface-softer); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.92rem; font-family: inherit; outline: none; resize: vertical; }
+    .form-input:focus { border-color: var(--brand-main); }
+    .urgency-row { display: flex; gap: 10px; }
+    .urgency-chip { flex: 1; text-align: center; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.82rem; font-weight: 700; cursor: pointer; color: var(--text-muted); }
+    .urgency-chip.selected { border-color: var(--brand-yellow-dark); background: #fff7e6; color: var(--brand-yellow-dark); }
+    
+    .btn-secondary { background: var(--surface-soft); color: var(--text-dark); border: none; padding: 0.7rem; border-radius: 8px; font-weight: 800; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px; transition: 0.2s; }
+    .btn-secondary:hover { background: var(--surface-hover); }
+    .submit-btn { width: 100%; padding: 0.9rem; border: none; border-radius: 10px; background: var(--accent-gradient); color: #1e293b; font-weight: 800; font-size: 0.95rem; cursor: pointer; margin-top: 6px; box-shadow: 0 4px 15px rgba(224,169,53,0.35); transition: opacity 0.2s; }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Seguimiento y Tarjetas */
+    .tracking-card { background: var(--card-bg); border-radius: 16px; padding: 18px; border: 1px solid var(--border-color); margin-top: 16px; display: none; }
+    .tracking-card.active { display: block; }
+    .tracking-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .status-badge { font-size: 0.75rem; font-weight: 800; padding: 5px 10px; border-radius: 20px; background: #fff7e6; color: var(--brand-yellow-dark); }
+    .status-badge.found { background: #ecfdf5; color: #15803d; }
+    
+    .offers-container { margin-top: 15px; border-top: 1px dashed var(--border-color); padding-top: 15px; }
+    .offers-title { font-size: 0.9rem; font-weight: 800; margin-bottom: 10px; color: var(--brand-main); display: flex; align-items: center; gap: 6px;}
+    .offer-card { border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: var(--surface-card2); }
+    .offer-meta { display: flex; flex-direction: column; gap: 4px; }
+    .offer-worker-name { font-weight: 800; font-size: 0.95rem; color: var(--text-dark); }
+    .offer-rating { font-size: 0.8rem; color: var(--text-muted); font-weight: 700; display:flex; align-items:center; gap: 4px;}
+    .offer-price { font-size: 1.1rem; font-weight: 800; color: #15803d; }
+    .btn-accept-offer { background: var(--brand-main); color: white; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+
+    .worker-info { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-color); }
+    .worker-avatar { width: 46px; height: 46px; border-radius: 50%; background: var(--brand-gradient); color: #fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size: 1.2rem; object-fit:cover; overflow:hidden;}
+    .worker-name { font-weight: 800; font-size: 0.92rem; color: var(--text-dark); }
+    .worker-meta { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; }
+    .cancel-link { display:block; text-align:center; margin-top: 16px; font-size: 0.82rem; color: var(--danger); font-weight: 700; cursor: pointer; }
+
+    /* Historial Complejo */
+    .info-card { background: var(--card-bg); border-radius: 16px; padding: 18px; border: 1px solid var(--border-color); margin-bottom: 12px; transition: 0.2s; cursor: pointer; }
+    .info-card:hover { border-color: var(--brand-main); }
+    .info-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .history-details { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border-color); font-size: 0.85rem; color: var(--text-muted); display: none; }
+    .history-details strong { color: var(--text-dark); }
+
+    /* Perfil */
+    .profile-header { background: var(--card-bg); border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 16px; border: 1px solid var(--border-color); box-shadow: 0 2px 8px var(--shadow-color); }
+    .profile-avatar-wrapper { position: relative; width: 80px; height: 80px; margin: 0 auto 16px; cursor: pointer; display: inline-block; }
+    .profile-avatar-big { width: 100%; height: 100%; border-radius: 50%; background: var(--brand-main); color: white; font-size: 2rem; font-weight: 800; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(10, 58, 97, 0.2); overflow: hidden; object-fit: cover;}
+    .avatar-upload-overlay { position: absolute; bottom: 0; right: 0; background: var(--brand-yellow); color: #1e293b; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border: 2px solid white; cursor: pointer; }
+    .profile-name { font-size: 1.3rem; font-weight: 800; color: var(--text-dark); margin-bottom: 4px; }
+    .profile-email { font-size: 0.9rem; color: var(--text-muted); font-weight: 500; margin-bottom: 16px; }
+    
+    .profile-stats-row { display: flex; justify-content: center; gap: 30px; padding-top: 16px; border-top: 1px solid var(--border-color); }
+    .stat-item { display: flex; flex-direction: column; align-items: center; }
+    .stat-value { font-size: 1.2rem; font-weight: 800; color: var(--brand-main); }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;}
+
+    .profile-menu { background: var(--card-bg); border-radius: 16px; overflow: hidden; border: 1px solid var(--border-color); box-shadow: 0 2px 8px var(--shadow-color); margin-bottom: 16px; }
+    .menu-item { display: flex; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background 0.2s; color: var(--text-dark); }
+    .menu-item:last-child { border-bottom: none; }
+    .menu-item:hover { background: var(--surface-softer); }
+    .menu-icon { margin-right: 16px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
+    .menu-text { flex: 1; font-weight: 600; font-size: 0.95rem; }
+    .menu-arrow { color: #cbd5e1; transition: transform 0.2s; }
+    .menu-item.danger { color: var(--danger); }
+    .menu-item.danger .menu-icon { color: var(--danger); }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 0.9rem; font-weight: 600; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+    /* Modales Nativos */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(2px); opacity: 0; animation: fadeInModal 0.2s forwards; }
+    .modal-content { background: var(--card-bg); width: 90%; max-width: 400px; border-radius: 16px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transform: translateY(20px); animation: slideUpModal 0.2s forwards; max-height: 90vh; overflow-y: auto;}
+    @keyframes fadeInModal { to { opacity: 1; } }
+    @keyframes slideUpModal { to { transform: translateY(0); } }
+
+    /* SISTEMA DE TOASTS */
+    .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast { background: var(--card-bg); border-radius: 8px; padding: 14px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 12px; animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; font-weight: 700; font-size: 0.9rem; color: var(--text-dark); border-left: 5px solid transparent; }
+    .toast.success { border-left-color: #15803d; }
+    .toast.error { border-left-color: #b91c1c; }
+    .toast.fade-out { animation: fadeOutRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes slideInRight { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOutRight { to { transform: translateX(120%); opacity: 0; } }
+
+    /* Barra Inferior */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card-bg); display: flex; justify-content: space-around; padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -2px 10px var(--shadow-color); z-index: 10; border-top: 1px solid var(--border-color);}
+    .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.68rem; color: var(--text-muted); font-weight: 700; cursor: pointer; transition: color 0.2s; }
+    .nav-item.active { color: var(--brand-main); }
+    .nav-item .ic { margin-bottom: 2px; }
+
+
+    /* Indicador perenne de la tasa BCV (siempre visible en la barra superior) */
+    .bcv-top-pill { display: none; align-items: center; gap: 5px; background: var(--surface-soft); color: var(--brand-yellow-dark); border: 1px solid var(--border-color); border-radius: 20px; padding: 5px 10px; font-size: 0.72rem; font-weight: 800; white-space: nowrap; cursor: default; }
+    .bcv-top-pill.visible { display: inline-flex; }
+    @media (max-width: 380px) { .bcv-top-pill { font-size: 0.65rem; padding: 4px 8px; } }
+
+
+    /* Badge de mensajes no leídos en la barra inferior */
+    .nav-item { position: relative; }
+    .badge-mensajes { position: absolute; top: -4px; right: 50%; margin-right: -22px; background: var(--danger); color: #fff; font-size: 0.62rem; font-weight: 800; min-width: 17px; height: 17px; border-radius: 10px; display: none; align-items: center; justify-content: center; padding: 0 4px; }
+    .badge-mensajes.visible { display: inline-flex; }
+
+
+    /* Insignia de nivel (Ruta del Relámpago) en las ofertas */
+    .nivel-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.62rem; font-weight: 800; padding: 2px 8px; border-radius: 10px; border: 1px solid; text-transform: uppercase; letter-spacing: 0.3px; }
+
+    /* Botón de tema (claro/oscuro) */
+    .theme-toggle-btn { background: var(--surface-soft); color: var(--brand-main); border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; margin-right: 10px; transition: all 0.2s; }
+    .theme-toggle-btn:hover { background: var(--surface-hover); transform: rotate(15deg); }
+
+    /* ============ CHAT CLIENTE-TRABAJADOR ============ */
+    .chat-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: flex-end; justify-content: center; z-index: 150; backdrop-filter: blur(2px); }
+    .chat-overlay.active { display: flex; }
+    .chat-window { background: var(--card-bg); width: 100%; max-width: 480px; height: 78vh; border-radius: 20px 20px 0 0; display: flex; flex-direction: column; overflow: hidden; animation: slideUpModal 0.25s forwards; border: 1px solid var(--border-color); border-bottom: none; }
+    @media (min-width: 720px) { .chat-overlay { align-items: center; } .chat-window { border-radius: 20px; height: 70vh; border-bottom: 1px solid var(--border-color); } }
+    .chat-header { padding: 14px 16px; background: var(--brand-gradient); color: #fff; display: flex; align-items: center; justify-content: space-between; }
+    .chat-header .chat-title { font-weight: 800; font-size: 0.95rem; }
+    .chat-header .chat-sub { font-size: 0.75rem; opacity: 0.85; font-weight: 600; }
+    .chat-close { background: rgba(255,255,255,0.15); border: none; color: #fff; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--surface-softer); }
+    .chat-bubble { max-width: 78%; padding: 10px 14px; border-radius: 14px; font-size: 0.9rem; font-weight: 600; line-height: 1.4; word-wrap: break-word; }
+    .chat-bubble.mio { align-self: flex-end; background: var(--brand-main); color: #fff; border-bottom-right-radius: 4px; }
+    html[data-theme="dark"] .chat-bubble.mio { color: #0a1226; }
+    .chat-bubble.otro { align-self: flex-start; background: var(--card-bg); color: var(--text-dark); border: 1px solid var(--border-color); border-bottom-left-radius: 4px; }
+    .chat-bubble .chat-hora { display: block; font-size: 0.65rem; opacity: 0.7; margin-top: 4px; font-weight: 700; text-align: right; }
+    .chat-input-row { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border-color); background: var(--card-bg); }
+    .chat-input-row input { flex: 1; padding: 0.7rem 1rem; background: var(--surface-softer); border: 1px solid var(--border-color); border-radius: 24px; font-family: inherit; font-size: 0.9rem; outline: none; color: var(--text-dark); }
+    .chat-send-btn { background: var(--brand-main); color: #fff; border: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .chat-empty { text-align: center; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; margin: auto; }
+
+    .btn-chat { background: var(--brand-main); color: white; border: none; padding: 10px 16px; border-radius: 10px; font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    html[data-theme="dark"] .btn-chat { color: #0a1226; }
+
+    .tasa-bcv-pill { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.15); border-radius: 20px; padding: 4px 12px; font-size: 0.75rem; font-weight: 700; margin-top: 10px; }
+    .precio-bs { display: block; font-size: 0.72rem; color: var(--text-muted); font-weight: 700; }
+
+    /* Estilos personalizados para las listas de modales */
+    .list-item-saved { border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: var(--surface-card2); }
+    .list-item-saved .info { display: flex; flex-direction: column; gap: 3px; }
+    .list-item-saved .info strong { font-size: 0.9rem; color: var(--text-dark); }
+    .list-item-saved .info small { font-size: 0.8rem; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<div class="topbar">
+    <div class="logo-row"><img src="logo_fixio.png" alt="logo" onerror="this.style.display='none'"></div>
+    <div class="greeting">Hola, <span id="userName">...</span> </div>
+    <div class="bcv-top-pill" id="bcvTopPill" title="Tasa referencial del Banco Central de Venezuela"><i data-lucide="landmark" style="width:14px; height:14px; vertical-align:-2px;"></i> <span id="bcvTopTexto">BCV --</span></div>
+    <button class="theme-toggle-btn" id="themeToggleBtn" onclick="alternarTema()" title="Cambiar tema claro/oscuro" style="margin-left:10px;">
+        <i data-lucide="moon" id="themeIcon" style="width: 18px; height: 18px;"></i>
+    </button>
+    <div class="user-avatar-topbar" id="topbarAvatar" onclick="document.querySelector('[data-target=\'view-perfil\']').click()">
+        <i data-lucide="user" style="width: 18px; height: 18px; color: var(--brand-main);"></i>
+    </div>
+</div>
+
+<div class="container app-view active" id="view-inicio">
+    <div class="hero-banner" id="heroBanner">
+        <h1>¿Qué necesitas resolver hoy?</h1>
+        <p>Elige un servicio, recibe ofertas y conecta con profesionales verificados.</p>
+        <div class="tasa-bcv-pill" id="tasaBcvPill" style="display:none;">
+            <i data-lucide="landmark" style="width:14px; height:14px;"></i>
+            <span id="tasaBcvTexto">Tasa BCV: cargando...</span>
+        </div>
+    </div>
+
+    <div id="createServicePanel">
+        <div class="section-title" style="margin-top: 0;">Categorías de servicio</div>
+        <div style="position:relative; margin-bottom:14px;">
+            <i data-lucide="search" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); width:16px; height:16px; color:var(--text-muted); pointer-events:none;"></i>
+            <input type="text" id="buscadorServicios" class="form-input" placeholder="Buscar servicio (ej. plomería, niñera...)" style="padding-left:40px;" oninput="filtrarServicios(this.value)">
+        </div>
+        <div class="services-grid" id="servicesGrid"></div>
+
+        <div class="request-card" id="requestCard">
+            <div class="section-title" style="margin-top:0;">Detalles de tu solicitud: <span id="selectedServiceName" style="color: var(--brand-main);"></span></div>
+            <div class="form-group">
+                <label>Foto del problema <span style="font-size:0.75rem; font-weight:normal; color:var(--text-muted);">(opcional, ayuda a cotizar mejor)</span></label>
+                <input type="file" id="fotoProblema" accept="image/*" style="display:none;" onchange="previsualizarFoto(event)">
+                <div id="fotoPreviewBox" onclick="document.getElementById('fotoProblema').click()" style="border: 2px dashed var(--border-color); border-radius: 12px; padding: 14px; text-align: center; cursor: pointer; background: var(--surface-softer);">
+                    <span id="fotoPreviewTexto" style="font-size: 0.85rem; color: var(--text-muted); font-weight: 700;"><i data-lucide="camera" style="width:16px; height:16px; vertical-align:-2px;"></i> Toca para adjuntar una foto</span>
+                    <img id="fotoPreviewImg" style="display:none; max-width: 100%; max-height: 140px; border-radius: 8px; margin-top: 8px;">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Dirección (Referencia escrita)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" class="form-input" id="direccion" placeholder="Ej: Av. Principal, Edif. X, Apto 4">
+                    <button type="button" class="btn-secondary" style="padding: 0 12px;" onclick="cargarDireccionRapida()" title="Elegir dirección guardada"><i data-lucide="bookmark" style="width: 18px;"></i></button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Ubicación Real GPS <span style="font-size:0.75rem; font-weight:normal; color:var(--text-muted);">(Arrastra el marcador para mayor precisión)</span></label>
+                <div id="mapContainer" style="height: 200px; border-radius: 8px; border: 1px solid var(--border-color); z-index: 1;"></div>
+                <button type="button" class="btn-secondary" style="margin-top: 8px;" onclick="obtenerUbicacionGPS()">
+                    <i data-lucide="crosshair" style="width:16px;"></i> Centrar en mi ubicación
+                </button>
+            </div>
+
+            <div class="form-group">
+                <label>Describe el problema o labor</label>
+                <textarea class="form-input" id="descripcion" rows="3" placeholder="Cuéntanos qué necesitas que se realice..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Urgencia</label>
+                <div class="urgency-row">
+                    <div class="urgency-chip selected" data-urg="normal">Normal</div>
+                    <div class="urgency-chip" data-urg="hoy">Hoy mismo</div>
+                    <div class="urgency-chip" data-urg="urgente">Urgente</div>
+                </div>
+            </div>
+            <button class="submit-btn" id="submitRequestBtn">Solicitar Cotizaciones</button>
+        </div>
+    </div>
+
+    <div class="tracking-card" id="trackingCard">
+        <div class="tracking-header">
+            <div>
+                <div style="font-weight:800; font-size:1rem;" id="trackingServiceName">Servicio</div>
+                <div style="font-size:0.8rem; color: var(--text-muted); font-weight:600;">Dirección: <span id="ticketDir">...</span></div>
+            </div>
+            <div class="status-badge" id="statusBadge">Buscando...</div>
+        </div>
+
+        <div class="offers-container" id="offersContainer" style="display:none;">
+            <div class="offers-title"><i data-lucide="bell-ring" style="width: 16px; height: 16px;"></i> Ofertas Recibidas</div>
+            <div id="offersList"></div>
+        </div>
+
+        <div class="worker-info" id="workerInfo" style="display:none;">
+            <div class="worker-avatar" id="workerAvatar">--</div>
+            <div>
+                <div class="worker-name" id="workerName">--</div>
+                <div class="worker-meta" id="workerMeta">--</div>
+            </div>
+            <button class="btn-chat" id="btnChatTrabajador" onclick="abrirChat()">
+                <i data-lucide="message-circle" style="width:16px;"></i> Chat
+            </button>
+        </div>
+        <button id="btnReabrirBusqueda" style="display:none; width:100%; margin-top:12px; background:transparent; border:1.5px dashed var(--danger); color:var(--danger); padding:10px; border-radius:10px; font-weight:800; font-size:0.82rem; cursor:pointer; font-family:inherit;" onclick="reabrirBusqueda()">
+            <i data-lucide="alert-triangle" style="width:14px; height:14px; vertical-align:-2px;"></i> ¿El profesional no llegó? Buscar otro (tus ofertas anteriores se recuperan)
+        </button>
+        
+        <div class="cancel-link" id="cancelBtn">Cancelar solicitud</div>
+    </div>
+</div>
+
+<div class="container app-view" id="view-historial">
+    <div class="section-title" style="margin-top: 0;">Historial de Servicios</div>
+    <div id="historialList">
+        <div class="empty-state"><i data-lucide="clipboard-list" style="width: 48px; height: 48px; opacity: 0.5;"></i>Cargando historial...</div>
+    </div>
+</div>
+
+<div class="container app-view" id="view-mensajes">
+    <div class="section-title" style="margin-top: 0;">Bandeja de Mensajes</div>
+    <div id="mensajesLista">
+        <div class="empty-state" style="padding-top: 60px;">
+            <i data-lucide="message-square" style="width: 48px; height: 48px; opacity: 0.5;"></i>
+            <h3 style="font-size: 1.1rem; color: var(--text-dark); margin: 10px 0 5px;">No tienes mensajes activos</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Tus conversaciones con los trabajadores aparecerán aquí una vez asignados.</p>
+        </div>
+    </div>
+</div>
+
+<!-- CHAT EN VIVO CLIENTE <-> TRABAJADOR -->
+<div class="chat-overlay" id="chatOverlay">
+    <div class="chat-window">
+        <div class="chat-header">
+            <div>
+                <div class="chat-title" id="chatTitulo">Chat</div>
+                <div class="chat-sub" id="chatSubtitulo">Conversación del servicio</div>
+            </div>
+            <button class="chat-close" onclick="cerrarChat()"><i data-lucide="x" style="width:18px;"></i></button>
+        </div>
+        <div class="chat-messages" id="chatMensajes">
+            <div class="chat-empty">Cargando conversación...</div>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" id="chatInput" placeholder="Escribe un mensaje..." maxlength="1000" onkeydown="if(event.key==='Enter') enviarMensajeChat()">
+            <button class="chat-send-btn" onclick="enviarMensajeChat()"><i data-lucide="send" style="width:18px;"></i></button>
+        </div>
+    </div>
+</div>
+
+<div class="container app-view" id="view-perfil">
+    <div class="profile-header">
+        <!-- SOLUCIÓN AL BUG DEL AVATAR: Se usa la etiqueta label nativa en lugar de eventos onclick JS -->
+        <label class="profile-avatar-wrapper" for="avatarInput">
+            <div class="profile-avatar-big" id="profileAvatarInitials">--</div>
+            <div class="avatar-upload-overlay"><i data-lucide="camera" style="width: 14px; height: 14px;"></i></div>
+            <input type="file" id="avatarInput" accept="image/*" style="display: none;" onchange="subirAvatar(event)">
+        </label>
+
+        <div class="profile-name" id="profileFullName">Cargando...</div>
+        <div class="profile-email" id="profileEmail">...</div>
+        
+        <div class="profile-stats-row">
+            <div class="stat-item"><span class="stat-value" id="profileTotalServices">0</span><span class="stat-label">Servicios Completados</span></div>
+            <div class="stat-item"><span class="stat-value" id="profilePhone">--</span><span class="stat-label">Teléfono Registrado</span></div>
+        </div>
+    </div>
+
+    <div class="profile-menu">
+        <div class="menu-item" onclick="abrirModalEditarPerfil()"><div class="menu-icon"><i data-lucide="user-cog"></i></div><div class="menu-text">Editar cuenta</div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+        <div class="menu-item" onclick="abrirModalPagos()"><div class="menu-icon"><i data-lucide="credit-card"></i></div><div class="menu-text">Métodos de pago</div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+        <div class="menu-item" onclick="abrirModalDirecciones()"><div class="menu-icon"><i data-lucide="map-pin"></i></div><div class="menu-text">Direcciones guardadas</div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+        <div class="menu-item" onclick="abrirModalSoporte()"><div class="menu-icon"><i data-lucide="help-circle"></i></div><div class="menu-text">Soporte y Ayuda</div><div class="menu-arrow"><i data-lucide="chevron-right"></i></div></div>
+    </div>
+
+    <div class="profile-menu">
+        <div class="menu-item danger" onclick="cerrarSesion()"><div class="menu-icon"><i data-lucide="log-out"></i></div><div class="menu-text">Cerrar Sesión</div></div>
+    </div>
+</div>
+
+<div id="appModal" class="modal-overlay">
+    <div class="modal-content" id="modalBody"></div>
+</div>
+
+<div class="bottom-nav">
+    <div class="nav-item active" data-target="view-inicio"><div class="ic"><i data-lucide="home" style="width: 22px; height: 22px;"></i></div>Inicio</div>
+    <div class="nav-item" data-target="view-historial"><div class="ic"><i data-lucide="clipboard-list" style="width: 22px; height: 22px;"></i></div>Historial</div>
+    <div class="nav-item" data-target="view-mensajes"><div class="ic"><i data-lucide="message-square" style="width: 22px; height: 22px;"></i></div>Mensajes<span class="badge-mensajes" id="badgeMensajes"></span></div>
+    <div class="nav-item" data-target="view-perfil"><div class="ic"><i data-lucide="user" style="width: 22px; height: 22px;"></i></div>Perfil</div>
+</div>
+
+<script>
+    lucide.createIcons();
+
+    const API_URL = '/api'  // Ruta relativa: funciona en localhost y en producción;
+    const token = localStorage.getItem('userToken') || sessionStorage.getItem('userToken');
+    if (!token) { window.location.href = 'index.html'; }
+
+    let activeRequestId = null;
+    let activeRequestData = null;
+    let selectedServiceId = null;
+    let selectedUrgency = 'normal';
+    let pollingInterval = null;
+    let currentProfileData = {};
+
+    // Tasa referencial del BCV (USD -> Bs)
+    let tasaBCV = null;
+
+    // Variables de Mapa
+    let map = null;
+    let marker = null;
+    let usarGoogleMaps = false;
+    let gmap = null, gmarker = null, gcircle = null;
+    let userLat = 10.6427; 
+    let userLng = -71.6125;
+
+    // --- MODO OSCURO / CLARO ---
+    function aplicarIconoTema() {
+        const tema = document.documentElement.getAttribute('data-theme') || 'light';
+        const icono = document.getElementById('themeIcon');
+        if (icono) icono.setAttribute('data-lucide', tema === 'dark' ? 'sun' : 'moon');
+        lucide.createIcons();
+    }
+    window.alternarTema = function() {
+        const actual = document.documentElement.getAttribute('data-theme') || 'light';
+        const nuevo = actual === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', nuevo);
+        localStorage.setItem('themePreference', nuevo);
+        aplicarIconoTema();
+        showToast(nuevo === 'dark' ? 'Modo oscuro activado' : 'Modo claro activado', 'success');
+    };
+    aplicarIconoTema();
+
+    // --- TASA BCV ---
+    function formatearBs(montoUsd) {
+        if (!tasaBCV || isNaN(parseFloat(montoUsd))) return '';
+        const bs = parseFloat(montoUsd) * tasaBCV;
+        return 'Bs ' + bs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function actualizarPildoraBCV() {
+        if (!tasaBCV) return;
+        const p = document.getElementById('bcvTopPill');
+        document.getElementById('bcvTopTexto').innerText = 'BCV ' + tasaBCV.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2});
+        p.classList.add('visible');
+    }
+    async function cargarTasaBCV() {
+        try {
+            const res = await fetch(`${API_URL}/tasa-bcv`);
+            if (!res.ok) return;
+            const data = await res.json();
+            tasaBCV = parseFloat(data.tasa);
+            const pill = document.getElementById('tasaBcvPill');
+            document.getElementById('tasaBcvTexto').innerText =
+                `Tasa BCV: Bs ${tasaBCV.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})} / USD`;
+            pill.style.display = 'inline-flex';
+            actualizarPildoraBCV();
+            lucide.createIcons();
+            // Aviso en tiempo real con la tasa del día
+            showToast(`Tasa BCV de hoy: Bs ${tasaBCV.toLocaleString('es-VE', {minimumFractionDigits:2, maximumFractionDigits:2})} por USD`, 'success');
+        } catch (e) { /* Sin tasa, se muestran solo los montos en USD */ }
+    }
+
+    // --- SISTEMA DE TOASTS ---
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icon = type === 'success' ? 'check-circle' : 'alert-circle';
+        toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? '#15803d' : '#b91c1c'}"></i> <span>${message}</span>`;
+        container.appendChild(toast);
+        lucide.createIcons();
+        setTimeout(() => {
+            toast.classList.add('fade-out');
+            setTimeout(() => toast.remove(), 300);
+        }, 3500);
+    }
+
+    async function apiFetch(endpoint, options = {}) {
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(options.headers || {}) };
+        const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+        if (response.status === 401) {
+            localStorage.clear(); sessionStorage.clear();
+            window.location.href = 'index.html';
+            return new Promise(() => {});
+        }
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'Error de conexión');
+        return data;
+    }
+
+    function cerrarSesion() {
+        showToast("Cerrando sesión...", "success");
+        setTimeout(() => { localStorage.clear(); sessionStorage.clear(); window.location.href = 'index.html'; }, 1000);
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.querySelectorAll('.app-view').forEach(v => v.classList.remove('active'));
+            item.classList.add('active');
+            document.getElementById(item.getAttribute('data-target')).classList.add('active');
+            
+            if (item.getAttribute('data-target') === 'view-historial') loadHistory();
+            if (item.getAttribute('data-target') === 'view-perfil') loadProfile();
+            if (item.getAttribute('data-target') === 'view-mensajes') cargarBandejaMensajes();
+        });
+    });
+
+    // INIT RESILIENTE: cada paso aislado; los errores se muestran en pantalla
+    async function init() {
+        try {
+            const profile = await apiFetch('/profile');
+            currentProfileData = profile;
+            const un = document.getElementById('userName');
+            if (un) un.textContent = profile.nombre || 'Cliente';
+        } catch (error) {
+            console.error('Fallo al cargar el perfil:', error);
+            showToast('No se pudo cargar tu perfil: ' + error.message, 'error');
+            const un = document.getElementById('userName');
+            if (un) un.innerHTML = '<span style="cursor:pointer; text-decoration:underline;" onclick="init()">Reintentar</span>';
+        }
+        try { cargarTasaBCV(); } catch (e) {}
+        try { conectarTiempoReal(); } catch (e) {}
+        try { actualizarBadgeMensajes(); } catch (e) {}
+        try { migrarDireccionesLocales(); } catch (e) {}
+        try { await loadCategories(); } catch (e) {}
+        try { await checkActiveRequest(); } catch (e) {}
+        try { await inicializarMapa(); } catch (e) {}
+        try { loadProfile(); } catch (e) {}
+    }
+
+    window.addEventListener('error', (ev) => {
+        try { showToast('Error del panel: ' + (ev.message || 'desconocido'), 'error'); } catch (e) {}
+    });
+
+    // ==========================================================
+    // TIEMPO REAL (Socket.io): ofertas, estados y chat instantáneos.
+    // El polling existente queda como respaldo si el socket falla.
+    // ==========================================================
+    let socket = null;
+    function conectarTiempoReal() {
+        if (typeof io === 'undefined') return; // el script no cargó: seguimos con polling
+        try {
+            socket = io({ auth: { token } });
+
+            socket.on('nueva_oferta', () => {
+                if (activeRequestData && activeRequestData.estado === 'buscando') {
+                    loadOffers();
+                    showToast('¡Recibiste una nueva oferta!', 'success');
+                }
+            });
+
+            socket.on('estado_actualizado', (d) => {
+                showToast(`Tu servicio cambió a: ${formatearEstado(d.estado)}`, 'success');
+                checkActiveRequest();
+            });
+
+            socket.on('trabajador_abandono', () => {
+                showToast('El profesional abandonó el trabajo. La búsqueda se reabrió con tus ofertas anteriores.', 'error');
+                cerrarChat();
+                checkActiveRequest();
+            });
+
+            socket.on('nuevo_mensaje', (d) => {
+                if (chatSolicitudId && parseInt(d.solicitud_id) === parseInt(chatSolicitudId)) {
+                    cargarMensajesChat(true); // entrega instantánea
+                }
+            });
+
+            socket.on('mensaje_recibido', (d) => {
+                actualizarBadgeMensajes();
+                if (!chatSolicitudId || parseInt(d.solicitud_id) !== parseInt(chatSolicitudId)) {
+                    showToast('Nuevo mensaje del profesional. Revísalo en Mensajes.', 'success');
+                }
+            });
+        } catch (e) { socket = null; }
+    }
+
+    // --- INTEGRACIÓN LEAFLET ---
+    let accuracyCircle = null;
+    let gpsWatchId = null;
+    let gpsObtenido = false;
+
+    // El servidor indica si hay clave de Google Maps configurada (.env -> GOOGLE_MAPS_API_KEY).
+    // Con clave: se usa Google Maps (mejor imagen satelital y geocoding).
+    // Sin clave: se usa OpenStreetMap/Leaflet como hasta ahora (cero costo).
+    async function inicializarMapa() {
+        try {
+            const cfg = await fetch(`${API_URL}/config`).then(r => r.json());
+            if (cfg.googleMapsApiKey) {
+                await cargarScriptGoogleMaps(cfg.googleMapsApiKey);
+                usarGoogleMaps = true;
+            }
+        } catch (e) { usarGoogleMaps = false; }
+
+        if (usarGoogleMaps) inicializarGoogleMap();
+        else inicializarLeaflet();
+
+        // Pedir la ubicación real del cliente de inmediato
+        obtenerUbicacionGPS(true);
+    }
+
+    function cargarScriptGoogleMaps(apiKey) {
+        return new Promise((resolve, reject) => {
+            if (window.google && window.google.maps) return resolve();
+            const s = document.createElement('script');
+            s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async`;
+            s.async = true;
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('No se pudo cargar Google Maps'));
+            document.head.appendChild(s);
+            setTimeout(() => reject(new Error('Timeout Google Maps')), 8000);
+        });
+    }
+
+    function inicializarGoogleMap() {
+        const esOscuro = (document.documentElement.getAttribute('data-theme') === 'dark');
+        gmap = new google.maps.Map(document.getElementById('mapContainer'), {
+            center: { lat: userLat, lng: userLng },
+            zoom: 13,
+            streetViewControl: false,
+            mapTypeControl: true,
+            fullscreenControl: false,
+            styles: esOscuro ? ESTILO_GOOGLE_OSCURO : []
+        });
+        gmarker = new google.maps.Marker({
+            position: { lat: userLat, lng: userLng },
+            map: gmap,
+            draggable: true
+        });
+        gmarker.addListener('dragend', () => {
+            const pos = gmarker.getPosition();
+            userLat = pos.lat(); userLng = pos.lng();
+            detenerGPS();
+            autocompletarDireccion();
+        });
+        gmap.addListener('click', (e) => {
+            userLat = e.latLng.lat(); userLng = e.latLng.lng();
+            gmarker.setPosition(e.latLng);
+            detenerGPS();
+            autocompletarDireccion();
+        });
+    }
+
+    // Estilo nocturno oficial de Google para integrarse al modo oscuro
+    const ESTILO_GOOGLE_OSCURO = [
+        { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#38414e' }] },
+        { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] }
+    ];
+
+    function inicializarLeaflet() {
+        map = L.map('mapContainer').setView([userLat, userLng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 19
+        }).addTo(map);
+
+        marker = L.marker([userLat, userLng], { draggable: true }).addTo(map);
+
+        marker.on('dragend', function(e) {
+            const position = marker.getLatLng();
+            userLat = position.lat;
+            userLng = position.lng;
+            detenerGPS(); // El usuario ajustó manualmente: respetamos su posición
+            autocompletarDireccion();
+        });
+
+        map.on('click', function(e) {
+            userLat = e.latlng.lat; 
+            userLng = e.latlng.lng;
+            marker.setLatLng([userLat, userLng]);
+            detenerGPS();
+            autocompletarDireccion();
+        });
+    }
+
+    // Refresca el tamaño/centro del mapa cuando su contenedor cambia de visibilidad
+    function refrescarMapa() {
+        if (usarGoogleMaps && gmap) {
+            google.maps.event.trigger(gmap, 'resize');
+            gmap.setCenter({ lat: userLat, lng: userLng });
+        } else if (map) {
+            map.invalidateSize();
+            map.setView([userLat, userLng], map.getZoom());
+        }
+    }
+
+    function actualizarPosicionEnMapa(position, silencioso) {
+        userLat = position.coords.latitude;
+        userLng = position.coords.longitude;
+        const precision = position.coords.accuracy || 0;
+        // Zoom acorde a la precisión obtenida
+        const zoom = precision <= 30 ? 18 : precision <= 100 ? 16 : 14;
+
+        if (usarGoogleMaps && gmap) {
+            gmarker.setPosition({ lat: userLat, lng: userLng });
+            if (gcircle) gcircle.setMap(null);
+            gcircle = new google.maps.Circle({
+                map: gmap, center: { lat: userLat, lng: userLng }, radius: precision,
+                strokeColor: '#0a3a61', strokeWeight: 1, fillColor: '#0a3a61', fillOpacity: 0.12
+            });
+            gmap.setCenter({ lat: userLat, lng: userLng });
+            gmap.setZoom(zoom);
+        } else {
+            marker.setLatLng([userLat, userLng]);
+
+            // Círculo de precisión: muestra el margen de error real del GPS
+            if (accuracyCircle) map.removeLayer(accuracyCircle);
+            accuracyCircle = L.circle([userLat, userLng], {
+                radius: precision,
+                color: '#0a3a61', fillColor: '#0a3a61', fillOpacity: 0.12, weight: 1
+            }).addTo(map);
+
+            map.setView([userLat, userLng], zoom);
+        }
+
+        if (!silencioso) showToast(`Ubicación encontrada (precisión: ±${Math.round(precision)} m).`, "success");
+        if (!gpsObtenido) { gpsObtenido = true; autocompletarDireccion(); }
+    }
+
+    function detenerGPS() {
+        if (gpsWatchId !== null) {
+            navigator.geolocation.clearWatch(gpsWatchId);
+            gpsWatchId = null;
+        }
+    }
+
+    function obtenerUbicacionGPS(silencioso = false) {
+        if (!navigator.geolocation) {
+            return showToast("Tu navegador no soporta geolocalización.", "error");
+        }
+        if (!silencioso) showToast("Buscando señal GPS...", "success");
+
+        detenerGPS();
+        gpsObtenido = false;
+        let mejorPrecision = Infinity;
+
+        // watchPosition afina la lectura: la primera suele venir de WiFi/IP (imprecisa)
+        // y las siguientes del GPS real del dispositivo.
+        gpsWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                if (position.coords.accuracy < mejorPrecision) {
+                    mejorPrecision = position.coords.accuracy;
+                    actualizarPosicionEnMapa(position, silencioso && gpsObtenido);
+                }
+                // Con menos de 25 m de error ya es suficiente: detenemos el rastreo
+                if (position.coords.accuracy <= 25) detenerGPS();
+            },
+            (error) => {
+                detenerGPS();
+                if (error.code === error.PERMISSION_DENIED) {
+                    showToast("Permiso de ubicación denegado. Actívalo en tu navegador o mueve el marcador manualmente.", "error");
+                } else if (!silencioso) {
+                    showToast("No se pudo obtener la ubicación GPS. Ajusta el marcador manualmente.", "error");
+                }
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+
+        // Failsafe: detener el rastreo a los 20 segundos
+        setTimeout(detenerGPS, 20000);
+    }
+
+    // Rellena el campo de dirección usando el endpoint /api/geocode del servidor
+    async function autocompletarDireccion() {
+        const campoDir = document.getElementById('direccion');
+        try {
+            const data = await apiFetch(`/geocode?lat=${userLat}&lng=${userLng}`);
+            if (data.direccion && !campoDir.value.trim()) {
+                campoDir.value = data.direccion;
+            } else if (data.direccion) {
+                campoDir.placeholder = data.direccion;
+            }
+        } catch (e) { /* Si falla el geocoding el usuario escribe manualmente */ }
+    }
+
+    const mapIconos = {
+        'Mecánica': 'wrench', 'Electricidad': 'zap', 'Plomería': 'droplet',
+        'Refrigeración': 'snowflake', 'Cerrajería': 'key', 'Jardinería': 'leaf',
+        'Limpieza y Hogar': 'sparkles', 'Cuidado de Niños': 'baby',
+        'Construcción': 'hard-hat', 'Educación': 'book-open', 'Instalación de Cámaras': 'cctv'
+    };
+
+    window.repetirSolicitud = function(id) {
+        const req = (window._historialCliente || []).find(r => r.id === id);
+        if (!req) return showToast('No se encontraron los datos de esa solicitud.', 'error');
+        if (activeRequestId) return showToast('Ya tienes una solicitud activa. Complétala o cancélala primero.', 'error');
+
+        // Volver a Inicio y precargar el formulario con los datos anteriores
+        document.querySelector('[data-target="view-inicio"]').click();
+        setTimeout(() => {
+            const card = document.querySelector(`.service-card[data-id="${req.categoria_id}"]`);
+            if (card) card.click();
+            document.getElementById('direccion').value = req.direccion || '';
+            document.getElementById('descripcion').value = req.descripcion || '';
+            if (req.latitud && req.longitud) {
+                userLat = parseFloat(req.latitud); userLng = parseFloat(req.longitud);
+                detenerGPS();
+                if (usarGoogleMaps && gmap) { gmarker.setPosition({lat:userLat,lng:userLng}); gmap.setCenter({lat:userLat,lng:userLng}); }
+                else if (map) { marker.setLatLng([userLat,userLng]); map.setView([userLat,userLng], 15); }
+            }
+            showToast('Solicitud precargada. Revisa los datos y pide cotizaciones.', 'success');
+            document.getElementById('createPanel')?.scrollIntoView({ behavior: 'smooth' });
+        }, 250);
+    };
+
+    window.filtrarServicios = function(texto) {
+        const q = (texto || '').toLowerCase().trim();
+        document.querySelectorAll('#servicesGrid .service-card').forEach(card => {
+            const nombre = (card.querySelector('.name')?.textContent || '').toLowerCase();
+            card.style.display = !q || nombre.includes(q) ? '' : 'none';
+        });
+    };
+
+    async function loadCategories() {
+        const grid = document.getElementById('servicesGrid');
+        try {
+            const categorias = await apiFetch('/categorias');
+            grid.innerHTML = '';
+            categorias.forEach(cat => {
+                const div = document.createElement('div');
+                div.className = 'service-card';
+                div.dataset.id = cat.id; // permite precargar desde "Repetir solicitud" 
+                const lucideIcon = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(cat.icono || '') ? cat.icono : (mapIconos[cat.nombre] || 'wrench');
+                div.innerHTML = `<div class="service-icon"><i data-lucide="${lucideIcon}" style="width: 24px; height: 24px;"></i></div><div class="name">${cat.nombre}</div>`;
+                div.addEventListener('click', () => {
+                    document.querySelectorAll('.service-card').forEach(c => c.classList.remove('selected'));
+                    div.classList.add('selected');
+                    selectedServiceId = cat.id;
+                    document.getElementById('selectedServiceName').innerText = cat.nombre;
+                    document.getElementById('requestCard').classList.add('active');
+                    document.getElementById('requestCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(refrescarMapa, 300);
+                });
+                grid.appendChild(div);
+            });
+            lucide.createIcons();
+        } catch (error) { grid.innerHTML = '<div class="empty-state">Error cargando servicios.</div>'; }
+    }
+
+    document.querySelectorAll('.urgency-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            document.querySelectorAll('.urgency-chip').forEach(c => c.classList.remove('selected'));
+            chip.classList.add('selected');
+            selectedUrgency = chip.dataset.urg;
+        });
+    });
+
+    // Foto del problema: se comprime en el navegador antes de enviarla
+    let fotoProblemaBase64 = null;
+    window.previsualizarFoto = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 1000;
+                const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(img.width * escala);
+                canvas.height = Math.round(img.height * escala);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                fotoProblemaBase64 = canvas.toDataURL('image/jpeg', 0.75);
+                document.getElementById('fotoPreviewImg').src = fotoProblemaBase64;
+                document.getElementById('fotoPreviewImg').style.display = 'block';
+                document.getElementById('fotoPreviewTexto').innerText = 'Foto adjunta (toca para cambiar)';
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    document.getElementById('submitRequestBtn').addEventListener('click', async () => {
+        const direccion = document.getElementById('direccion').value;
+        const descripcion = document.getElementById('descripcion').value;
+        
+        if (!direccion) return showToast('Por favor ingresa la dirección escrita.', 'error');
+
+        const btn = document.getElementById('submitRequestBtn');
+        btn.disabled = true; btn.innerText = 'Procesando...';
+        try {
+            await apiFetch('/solicitudes', { 
+                method: 'POST', 
+                body: JSON.stringify({ 
+                    categoria_id: selectedServiceId, direccion, descripcion, urgencia: selectedUrgency,
+                    latitud: userLat, longitud: userLng,
+                    foto: fotoProblemaBase64
+                }) 
+            });
+            showToast('Solicitud enviada a los profesionales cercanos.', 'success');
+            fotoProblemaBase64 = null;
+            await checkActiveRequest();
+        } catch (error) { showToast(error.message, 'error'); } 
+        finally { btn.disabled = false; btn.innerText = 'Solicitar Cotizaciones'; }
+    });
+
+    async function checkActiveRequest() {
+        try {
+            const activeReq = await apiFetch('/solicitudes/activa');
+            const createPanel = document.getElementById('createServicePanel');
+            const trackingCard = document.getElementById('trackingCard');
+            if (pollingInterval) clearInterval(pollingInterval);
+
+            if (activeReq) {
+                activeRequestId = activeReq.id;
+                activeRequestData = activeReq;
+                createPanel.style.display = 'none';
+                trackingCard.classList.add('active');
+                document.getElementById('trackingServiceName').innerText = activeReq.categoria_nombre;
+                document.getElementById('ticketDir').innerText = activeReq.direccion;
+
+                const statusBadge = document.getElementById('statusBadge');
+                const offersContainer = document.getElementById('offersContainer');
+                const workerInfo = document.getElementById('workerInfo');
+
+                if (activeReq.estado === 'buscando') {
+                    statusBadge.innerText = 'Esperando ofertas...';
+                    statusBadge.className = 'status-badge';
+                    offersContainer.style.display = 'block'; workerInfo.style.display = 'none';
+                    loadOffers(); pollingInterval = setInterval(loadOffers, 5000);
+                } else {
+                    statusBadge.innerText = formatearEstado(activeReq.estado);
+                    statusBadge.className = 'status-badge found';
+                    offersContainer.style.display = 'none'; workerInfo.style.display = 'flex';
+                    // Reabrir solo tiene sentido si el trabajo aún no comenzó
+                    document.getElementById('btnReabrirBusqueda').style.display =
+                        ['asignado', 'en_camino'].includes(activeReq.estado) ? 'block' : 'none';
+                    // Seguimiento en vivo: si el trabajador cambia el estado (en camino,
+                    // en proceso, completado) el cliente lo ve sin recargar la página.
+                    pollingInterval = setInterval(checkActiveRequest, 8000);
+                    
+                    const tNombre = activeReq.trabajador_nombre || 'Profesional';
+                    const avatarSrc = activeReq.avatar_url ? `<img src="${activeReq.avatar_url}" style="width:100%;height:100%;object-fit:cover;">` : tNombre.charAt(0).toUpperCase();
+                    document.getElementById('workerAvatar').innerHTML = avatarSrc;
+                    document.getElementById('workerName').innerText = `${tNombre} ${activeReq.trabajador_apellido || ''}`;
+                    const bs = formatearBs(activeReq.costo_estimado);
+                    document.getElementById('workerMeta').innerText = `★ ${activeReq.calificacion_promedio || 'Nuevo'} · Acordado: $${activeReq.costo_estimado || 0}${bs ? ` (≈ ${bs})` : ''}`;
+                    lucide.createIcons();
+                }
+            } else {
+                activeRequestId = null; activeRequestData = null; createPanel.style.display = 'block'; trackingCard.classList.remove('active');
+                setTimeout(refrescarMapa, 300);
+                // ¿Hay un servicio completado sin pagar o sin calificar? -> flujo de cierre
+                verificarCierrePendiente();
+            }
+        } catch (error) { console.error('Error al verificar estado:', error); }
+    }
+
+    async function loadOffers() {
+        if (!activeRequestId) return;
+        try {
+            const ofertas = await apiFetch(`/solicitudes/${activeRequestId}/ofertas`);
+            const list = document.getElementById('offersList');
+            if (ofertas.length === 0) {
+                list.innerHTML = '<div style="font-size:0.8rem; color:var(--text-muted);">Aún no hay ofertas. Los profesionales están revisando tu solicitud.</div>';
+                return;
+            }
+            let html = '';
+            ofertas.forEach(of => {
+                const nivelColor = of.nivel_color || '#e0a935';
+                html += `<div class="offer-card">
+                    <div class="offer-meta">
+                        <div class="offer-worker-name">${of.nombre} ${of.apellido}</div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin:3px 0;">
+                            <span class="nivel-badge" style="color:${nivelColor}; border-color:${nivelColor}55; background:${nivelColor}1a;">
+                                <i data-lucide="${of.nivel_icono || 'sparkles'}" style="width:11px; height:11px;"></i> ${of.nivel_nombre || 'Chispa'}
+                            </span>
+                            ${of.verificado ? `<span class="nivel-badge" style="color:#22c55e; border-color:#22c55e55; background:#22c55e1a;"><i data-lucide="badge-check" style="width:11px; height:11px;"></i> Verificado</span>` : ''}
+                        </div>
+                        <div class="offer-rating">★ ${of.calificacion_promedio || 'Nuevo'} (${of.total_servicios || 0} trabajos)</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="offer-price">$${of.monto}</div>
+                        ${formatearBs(of.monto) ? `<span class="precio-bs">≈ ${formatearBs(of.monto)}</span>` : ''}
+                        <button class="btn-accept-offer" style="margin-top:4px;" onclick="acceptOffer(${of.id})">Aceptar</button>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+            lucide.createIcons();
+        } catch (error) { console.error('Error cargando ofertas'); }
+    }
+
+    window.acceptOffer = async function(ofertaId) {
+        try { 
+            await apiFetch(`/ofertas/${ofertaId}/aceptar`, { method: 'PUT' }); 
+            showToast("Oferta aceptada, profesional asignado.", "success");
+            await checkActiveRequest();
+            // Apertura inmediata del chat con el trabajador asignado
+            setTimeout(() => abrirChat(), 400);
+        } 
+        catch (error) { showToast("Error: " + error.message, 'error'); }
+    };
+
+
+    // ==========================================================
+    // MENSAJES NO LEÍDOS: badge en vivo en la pestaña Mensajes
+    // ==========================================================
+    async function actualizarBadgeMensajes() {
+        try {
+            const d = await apiFetch('/mensajes/no-leidos');
+            const b = document.getElementById('badgeMensajes');
+            if (!b) return;
+            if (d.total > 0) { b.textContent = d.total > 99 ? '99+' : d.total; b.classList.add('visible'); }
+            else b.classList.remove('visible');
+        } catch (e) {}
+    }
+    setInterval(actualizarBadgeMensajes, 30000);
+
+    // ==========================================================
+    // CHAT EN VIVO CON EL TRABAJADOR
+    // ==========================================================
+    let chatSolicitudId = null;
+    let chatPollingInterval = null;
+    let ultimoMensajeId = 0;
+
+    function escaparHTML(texto) {
+        const div = document.createElement('div');
+        div.innerText = texto;
+        return div.innerHTML;
+    }
+
+    window.abrirChat = function(solicitudId = null, titulo = null) {
+        chatSolicitudId = solicitudId || activeRequestId;
+        if (!chatSolicitudId) return showToast('No hay una conversación activa.', 'error');
+
+        const nombreTrabajador = titulo ||
+            (activeRequestData && activeRequestData.trabajador_nombre
+                ? `${activeRequestData.trabajador_nombre} ${activeRequestData.trabajador_apellido || ''}`.trim()
+                : 'Profesional');
+
+        document.getElementById('chatTitulo').innerText = nombreTrabajador;
+        document.getElementById('chatSubtitulo').innerText = activeRequestData ? activeRequestData.categoria_nombre : 'Conversación del servicio';
+        document.getElementById('chatMensajes').innerHTML = '<div class="chat-empty">Cargando conversación...</div>';
+        document.getElementById('chatOverlay').classList.add('active');
+        ultimoMensajeId = 0;
+        lucide.createIcons();
+
+        cargarMensajesChat(true);
+        setTimeout(actualizarBadgeMensajes, 800); // al abrir, los mensajes quedan leídos
+        if (socket) socket.emit('unirse_solicitud', chatSolicitudId);
+        if (chatPollingInterval) clearInterval(chatPollingInterval);
+        // Con socket activo el mensaje llega al instante; el polling queda como respaldo lento
+        chatPollingInterval = setInterval(() => cargarMensajesChat(false), socket ? 15000 : 4000);
+    };
+
+    window.cerrarChat = function() {
+        document.getElementById('chatOverlay').classList.remove('active');
+        if (socket && chatSolicitudId) socket.emit('salir_solicitud', chatSolicitudId);
+        if (chatPollingInterval) { clearInterval(chatPollingInterval); chatPollingInterval = null; }
+        chatSolicitudId = null;
+    };
+
+    async function cargarMensajesChat(inicial) {
+        if (!chatSolicitudId) return;
+        try {
+            const mensajes = await apiFetch(`/solicitudes/${chatSolicitudId}/mensajes`);
+            const cont = document.getElementById('chatMensajes');
+
+            if (mensajes.length === 0) {
+                cont.innerHTML = '<div class="chat-empty">Aún no hay mensajes.<br>¡Saluda a tu profesional!</div>';
+                return;
+            }
+
+            const nuevoUltimo = mensajes[mensajes.length - 1].id;
+            if (!inicial && nuevoUltimo === ultimoMensajeId) return; // Sin cambios: no repintar
+            ultimoMensajeId = nuevoUltimo;
+
+            cont.innerHTML = mensajes.map(m => {
+                const esMio = m.remitente_id === (currentProfileData.id || 0);
+                const hora = new Date(m.fecha).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                return `<div class="chat-bubble ${esMio ? 'mio' : 'otro'}">${escaparHTML(m.contenido)}<span class="chat-hora">${hora}</span></div>`;
+            }).join('');
+            cont.scrollTop = cont.scrollHeight;
+        } catch (e) { /* Silencioso: el polling reintenta */ }
+    }
+
+    window.enviarMensajeChat = async function() {
+        const input = document.getElementById('chatInput');
+        const contenido = input.value.trim();
+        if (!contenido || !chatSolicitudId) return;
+        input.value = '';
+        try {
+            await apiFetch(`/solicitudes/${chatSolicitudId}/mensajes`, {
+                method: 'POST',
+                body: JSON.stringify({ contenido })
+            });
+            cargarMensajesChat(true);
+        } catch (e) { showToast(e.message, 'error'); input.value = contenido; }
+    };
+
+    // Bandeja de mensajes: muestra la conversación activa si hay trabajador asignado
+    async function cargarBandejaMensajes() {
+        const cont = document.getElementById('mensajesLista');
+        const vacio = `
+            <div class="empty-state" style="padding-top: 60px;">
+                <i data-lucide="message-square" style="width: 48px; height: 48px; opacity: 0.5;"></i>
+                <h3 style="font-size: 1.1rem; color: var(--text-dark); margin: 10px 0 5px;">No tienes mensajes activos</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">Tus conversaciones con los trabajadores aparecerán aquí una vez asignados.</p>
+            </div>`;
+        try {
+            await checkActiveRequest();
+            if (activeRequestData && activeRequestData.trabajador_id) {
+                const nombre = `${activeRequestData.trabajador_nombre || 'Profesional'} ${activeRequestData.trabajador_apellido || ''}`.trim();
+                cont.innerHTML = `
+                    <div class="info-card" onclick="abrirChat()">
+                        <div class="info-card-header">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <div class="worker-avatar">${(activeRequestData.trabajador_nombre || 'P').charAt(0).toUpperCase()}</div>
+                                <div>
+                                    <div style="font-weight:800; color: var(--text-dark);">${nombre}</div>
+                                    <div style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">${activeRequestData.categoria_nombre} · ${formatearEstado(activeRequestData.estado)}</div>
+                                </div>
+                            </div>
+                            <i data-lucide="message-circle" style="color: var(--brand-main);"></i>
+                        </div>
+                    </div>`;
+            } else {
+                cont.innerHTML = vacio;
+            }
+        } catch (e) { cont.innerHTML = vacio; }
+        lucide.createIcons();
+    }
+
+    // FLUJO COMPLEJO DE CANCELACIÓN
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+        if (!activeRequestId) return;
+        const html = `
+            <h3 style="margin-bottom: 15px; font-weight: 800; color: var(--danger);"><i data-lucide="alert-triangle" style="width: 20px; vertical-align: bottom;"></i> Cancelar Solicitud</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Por favor indícanos por qué deseas cancelar el servicio, esto nos ayuda a mejorar.</p>
+            
+            <div class="form-group">
+                <label>Motivo de cancelación</label>
+                <select id="motivoCancelacion" class="form-input" onchange="document.getElementById('motivoOtroContainer').style.display = this.value === 'Otro' ? 'block' : 'none'">
+                    <option value="Ya no necesito el servicio">Ya no necesito el servicio</option>
+                    <option value="Tiempo de espera muy largo">Tiempo de espera muy largo</option>
+                    <option value="Presupuesto insuficiente">Presupuesto insuficiente</option>
+                    <option value="Otro">Otro distinto</option>
+                </select>
+            </div>
+            <div class="form-group" id="motivoOtroContainer" style="display:none;">
+                <input type="text" id="motivoOtro" class="form-input" placeholder="Especifique su motivo...">
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-secondary" style="flex: 1;" onclick="closeModal()">Volver</button>
+                <button class="submit-btn" style="flex: 1; margin-top: 0; background: var(--danger); color: white; box-shadow: none;" onclick="ejecutarCancelacion()">Confirmar</button>
+            </div>
+        `;
+        openModal(html);
+    });
+
+    window.ejecutarCancelacion = async function() {
+        let motivo = document.getElementById('motivoCancelacion').value;
+        if(motivo === 'Otro') motivo = document.getElementById('motivoOtro').value || 'Otro motivo';
+        
+        // Guardaremos el motivo en localStorage temporalmente para mostrarlo en el historial si el backend no lo soporta nativamente aún
+        let motivosGuardados = JSON.parse(localStorage.getItem('motivosCancelacion') || '{}');
+        motivosGuardados[activeRequestId] = motivo;
+        localStorage.setItem('motivosCancelacion', JSON.stringify(motivosGuardados));
+
+        try { 
+            await apiFetch(`/solicitudes/${activeRequestId}/cancelar`, { 
+                method: 'PUT',
+                body: JSON.stringify({ motivo: motivo }) // Se envía por si el backend se actualiza
+            }); 
+            showToast("Solicitud cancelada correctamente.", "success");
+            closeModal();
+            checkActiveRequest(); 
+        } catch (error) { showToast("Error: " + error.message, 'error'); }
+    };
+
+    window.reabrirBusqueda = async function() {
+        if (!confirm('¿Seguro? El profesional actual será removido (con penalización) y tus ofertas anteriores volverán a estar disponibles.')) return;
+        try {
+            const r = await apiFetch(`/solicitudes/${activeRequestId}/reabrir`, { method: 'PUT' });
+            showToast(r.message, 'success');
+            cerrarChat();
+            await checkActiveRequest();
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    // ==========================================================
+    // CIERRE DEL SERVICIO: PAGO + CALIFICACIÓN (estilo apps de servicio)
+    // ==========================================================
+    let cierrePendiente = null;
+    let cierreModalMostrado = false;
+    let estrellasSeleccionadas = 5;
+
+    async function verificarCierrePendiente() {
+        try {
+            cierrePendiente = await apiFetch('/cliente/pendiente-cierre');
+            if (cierrePendiente && !cierreModalMostrado) {
+                cierreModalMostrado = true;
+                if (!cierrePendiente.pago_id) abrirModalPago();
+                else if (!cierrePendiente.calificacion_id) abrirModalCalificacion();
+            }
+        } catch (e) { /* silencioso */ }
+    }
+
+    window.abrirModalPago = function() {
+        if (!cierrePendiente) return;
+        const monto = cierrePendiente.costo_final || cierrePendiente.costo_estimado || 0;
+        const bs = formatearBs(monto);
+        const trabajador = `${cierrePendiente.trabajador_nombre || 'el profesional'} ${cierrePendiente.trabajador_apellido || ''}`.trim();
+
+        const html = `
+            <div style="text-align:center; margin-bottom:14px;">
+                <div style="width:56px; height:56px; border-radius:50%; background: var(--accent-gradient); display:inline-flex; align-items:center; justify-content:center; margin-bottom:10px;">
+                    <i data-lucide="check" style="width:28px; color:#1e293b;"></i>
+                </div>
+                <h3 style="font-weight:800; color: var(--text-dark);">¡Servicio completado!</h3>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">${cierrePendiente.categoria_nombre} · ${trabajador}</p>
+            </div>
+
+            <div style="background: var(--surface-softer); border-radius:12px; padding:16px; text-align:center; margin-bottom:16px; border:1px solid var(--border-color);">
+                <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Total a pagar</div>
+                <div style="font-size:1.8rem; font-weight:800; color: var(--text-dark);">$${monto}</div>
+                ${bs ? `<div style="font-size:0.85rem; font-weight:800; color: var(--brand-main);">≈ ${bs} <span style="font-weight:600; color:var(--text-muted);">(Tasa BCV)</span></div>` : ''}
+            </div>
+
+            <div class="form-group">
+                <label>Método de pago</label>
+                <select id="pagoMetodo" class="form-input" onchange="document.getElementById('pagoRefGroup').style.display = this.value === 'Efectivo / Divisas' ? 'none' : 'flex'">
+                    <option value="Pago Móvil">Pago Móvil</option>
+                    <option value="Zelle">Zelle</option>
+                    <option value="Transferencia">Transferencia bancaria</option>
+                    <option value="Efectivo / Divisas">Efectivo / Divisas</option>
+                </select>
+            </div>
+            <div class="form-group" id="pagoRefGroup">
+                <label>Número de referencia</label>
+                <input type="text" id="pagoReferencia" class="form-input" placeholder="Ej: 001234567890">
+            </div>
+
+            <button class="submit-btn" onclick="registrarPago()">Reportar Pago</button>
+            <button class="submit-btn" style="background: var(--surface-hover); color: var(--text-dark); margin-top:10px; box-shadow:none;" onclick="closeModal(); cierreModalMostrado = false;">Pagar más tarde</button>
+        `;
+        openModal(html);
+    };
+
+    window.registrarPago = async function() {
+        const metodo = document.getElementById('pagoMetodo').value;
+        const referencia = document.getElementById('pagoReferencia').value.trim();
+        if (metodo !== 'Efectivo / Divisas' && !referencia) return showToast('Ingresa el número de referencia del pago.', 'error');
+        try {
+            await apiFetch(`/solicitudes/${cierrePendiente.id}/pago`, {
+                method: 'POST',
+                body: JSON.stringify({ metodo_pago: metodo, referencia_pago: referencia || null })
+            });
+            showToast('Pago reportado. El profesional confirmará la recepción.', 'success');
+            // Siguiente paso del cierre: calificar
+            if (!cierrePendiente.calificacion_id) abrirModalCalificacion();
+            else { closeModal(); cierrePendiente = null; }
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    window.abrirModalCalificacion = function() {
+        if (!cierrePendiente) return;
+        estrellasSeleccionadas = 5;
+        const trabajador = `${cierrePendiente.trabajador_nombre || 'el profesional'} ${cierrePendiente.trabajador_apellido || ''}`.trim();
+        const html = `
+            <h3 style="font-weight:800; text-align:center; color: var(--text-dark); margin-bottom:6px;">Califica a ${trabajador}</h3>
+            <p style="font-size:0.85rem; color:var(--text-muted); text-align:center; margin-bottom:16px;">Tu opinión ayuda a otros clientes a elegir mejor.</p>
+
+            <div id="estrellasRow" style="display:flex; justify-content:center; gap:8px; margin-bottom:16px;">
+                ${[1,2,3,4,5].map(n => `<span onclick="marcarEstrellas(${n})" data-star="${n}" style="cursor:pointer; transition: transform 0.15s; color:#e0a935;"><i data-lucide="star" style="width:32px; height:32px; fill:currentColor;"></i></span>`).join('')}
+            </div>
+
+            <div class="form-group">
+                <label>Comentario (opcional)</label>
+                <textarea id="calificacionComentario" class="form-input" rows="3" placeholder="¿Cómo fue el servicio?"></textarea>
+            </div>
+
+            <button class="submit-btn" onclick="enviarCalificacion()">Enviar Calificación</button>
+            <button class="submit-btn" style="background: var(--surface-hover); color: var(--text-dark); margin-top:10px; box-shadow:none;" onclick="closeModal(); cierrePendiente = null;">Omitir</button>
+        `;
+        openModal(html);
+        marcarEstrellas(5);
+    };
+
+    window.marcarEstrellas = function(n) {
+        estrellasSeleccionadas = n;
+        document.querySelectorAll('#estrellasRow span').forEach(s => {
+            const val = parseInt(s.getAttribute('data-star'));
+            s.style.opacity = val <= n ? '1' : '0.25';
+            s.style.transform = val <= n ? 'scale(1.1)' : 'scale(1)';
+        });
+    };
+
+    window.enviarCalificacion = async function() {
+        const comentario = document.getElementById('calificacionComentario').value.trim();
+        try {
+            await apiFetch('/calificaciones', {
+                method: 'POST',
+                body: JSON.stringify({
+                    solicitud_id: cierrePendiente.id,
+                    puntuacion: estrellasSeleccionadas,
+                    comentario: comentario || null
+                })
+            });
+            showToast('¡Gracias por tu calificación!', 'success');
+            closeModal();
+            cierrePendiente = null;
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    // HISTORIAL EXPANDIBLE
+    window.toggleHistoryDetails = function(id) {
+        const details = document.getElementById(`history-details-${id}`);
+        const icon = document.getElementById(`history-icon-${id}`);
+        if (details.style.display === 'none') {
+            details.style.display = 'block';
+            icon.style.transform = 'rotate(180deg)';
+        } else {
+            details.style.display = 'none';
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    async function loadHistory() {
+        const list = document.getElementById('historialList');
+        try {
+            const historial = await apiFetch('/solicitudes/historial');
+            window._historialCliente = historial; // para "Repetir solicitud" 
+            if (historial.length === 0) {
+                list.innerHTML = `<div class="empty-state"><i data-lucide="clipboard-list" style="width: 48px; height: 48px; opacity: 0.5;"></i>No tienes servicios en tu historial.</div>`;
+                lucide.createIcons(); return;
+            }
+            
+            let motivosGuardados = JSON.parse(localStorage.getItem('motivosCancelacion') || '{}');
+            let html = '';
+            
+            historial.forEach(req => {
+                const date = new Date(req.fecha_creacion).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+                const isCancelled = req.estado === 'cancelado';
+                const isCompleted = req.estado === 'completado';
+                
+                let color = 'color:#475569; background:#e2e8f0;'; // Default (legible en claro y oscuro)
+                if(isCompleted) color = 'color:#15803d; background:#ecfdf5;';
+                if(isCancelled) color = 'color:#b91c1c; background:#fef2f2;';
+
+                let motivoHtml = '';
+                if(isCancelled && (req.motivo || motivosGuardados[req.id])) {
+                    motivoHtml = `<div style="margin-top: 6px;"><strong>Motivo:</strong> ${req.motivo || motivosGuardados[req.id]}</div>`;
+                }
+
+                html += `
+                <div class="info-card" onclick="toggleHistoryDetails(${req.id})">
+                    <div class="info-card-header">
+                        <div style="font-weight: 800; font-size: 0.95rem; color: var(--brand-main);">${req.categoria_nombre}</div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="status-badge" style="${color} margin:0; padding: 4px 8px;">${formatearEstado(req.estado)}</div>
+                            <i data-lucide="chevron-down" id="history-icon-${req.id}" style="width: 18px; color: var(--text-muted); transition: transform 0.2s;"></i>
+                        </div>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">
+                        <i data-lucide="calendar" style="width: 14px; height: 14px; vertical-align:middle;"></i> ${date} 
+                        ${req.costo_final ? `&nbsp;·&nbsp; $${req.costo_final}${formatearBs(req.costo_final) ? ' (≈ ' + formatearBs(req.costo_final) + ')' : ''}` : ''}
+                    </div>
+                    
+                    <div class="history-details" id="history-details-${req.id}">
+                        <div><strong>Dirección:</strong> ${req.direccion}</div>
+                        ${req.descripcion ? `<div style="margin-top: 6px;"><strong>Detalle:</strong> ${req.descripcion}</div>` : ''}
+                        ${motivoHtml}
+                    </div>
+                
+                    <button onclick="repetirSolicitud(${req.id})" style="margin-top:10px; width:100%; background:transparent; border:1.5px dashed var(--brand-main); color:var(--brand-main); padding:8px; border-radius:10px; font-weight:800; font-size:0.78rem; cursor:pointer; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:6px;">
+                        <i data-lucide="rotate-ccw" style="width:14px; height:14px;"></i> Repetir esta solicitud
+                    </button>
+                </div>`;
+            });
+            list.innerHTML = html; lucide.createIcons();
+        } catch (error) { list.innerHTML = '<div class="empty-state">Error cargando historial.</div>'; }
+    }
+
+    // --- CORRECCIÓN DE AVATAR (Mantiene la vista activa) ---
+    async function subirAvatar(event) {
+        const file = event.target.files[0];
+        if(!file) return;
+        
+        showToast("Procesando y subiendo imagen...", "success");
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = async function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const MAX_WIDTH = 400; const MAX_HEIGHT = 400;
+                let width = img.width; let height = img.height;
+
+                if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+
+                canvas.width = width; canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                const base64Image = canvas.toDataURL('image/jpeg', 0.7);
+                const avatarHTML = `<img src="${base64Image}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                
+                // Actualiza visualmente de inmediato sin recargar el panel entero
+                document.getElementById('profileAvatarInitials').innerHTML = avatarHTML;
+                document.getElementById('topbarAvatar').innerHTML = avatarHTML;
+                
+                try { 
+                    await apiFetch('/profile', { 
+                        method: 'PUT', 
+                        body: JSON.stringify({ 
+                            nombre: currentProfileData.nombre || '',
+                            apellido: currentProfileData.apellido || '',
+                            telefono: currentProfileData.telefono || '',
+                            cedula: currentProfileData.cedula || '', // Preservar cedula si existe
+                            avatar_url: base64Image 
+                        }) 
+                    }); 
+                    showToast("Foto guardada en tu perfil.", "success");
+                    // Actualizamos el objeto local silenciosamente
+                    currentProfileData.avatar_url = base64Image;
+                } 
+                catch (error) { 
+                    showToast("Error al guardar: " + error.message, "error"); 
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        event.target.value = ''; // Limpiar input
+    }
+
+    async function loadProfile() {
+        try {
+            const profile = await apiFetch('/profile');
+            currentProfileData = profile;
+            
+            const historial = await apiFetch('/solicitudes/historial');
+            window._historialCliente = historial; // para "Repetir solicitud" 
+            const completados = historial.filter(h => h.estado === 'completado').length;
+
+            let avatarHTML = '';
+            if (profile.avatar_url) {
+                avatarHTML = `<img src="${profile.avatar_url}" style="width: 100%; height: 100%; object-fit: cover;">`;
+            } else {
+                avatarHTML = (profile.nombre.charAt(0) + profile.apellido.charAt(0)).toUpperCase();
+            }
+
+            document.getElementById('profileAvatarInitials').innerHTML = avatarHTML;
+            document.getElementById('topbarAvatar').innerHTML = avatarHTML;
+            
+            document.getElementById('profileFullName').innerText = `${profile.nombre} ${profile.apellido}`;
+            document.getElementById('profileEmail').innerText = profile.email;
+            document.getElementById('profilePhone').innerText = profile.telefono || 'No registrado';
+            document.getElementById('profileTotalServices').innerText = completados;
+
+            lucide.createIcons();
+        } catch (error) { console.error("Error cargando perfil:", error); }
+    }
+
+    function openModal(htmlContent) {
+        document.getElementById('modalBody').innerHTML = htmlContent;
+        document.getElementById('appModal').style.display = 'flex';
+        lucide.createIcons();
+    }
+    function closeModal() { document.getElementById('appModal').style.display = 'none'; }
+
+    // EDICIÓN DE PERFIL CON CÉDULA
+    function abrirModalEditarPerfil() {
+        // Obtenemos la cédula del perfil si el backend la envía, sino del localStorage como respaldo temporal
+        const cedulaGuardada = currentProfileData.cedula || localStorage.getItem('userCedula') || '';
+        
+        const html = `
+            <h3 style="margin-bottom: 15px; font-weight: 800; color: var(--brand-main);">Editar Cuenta</h3>
+            <div class="form-group"><label>Nombre</label><input type="text" id="editNombre" class="form-input" value="${currentProfileData.nombre || ''}"></div>
+            <div class="form-group"><label>Apellido</label><input type="text" id="editApellido" class="form-input" value="${currentProfileData.apellido || ''}"></div>
+            <div class="form-group"><label>Cédula de Identidad</label><input type="text" id="editCedula" class="form-input" value="${cedulaGuardada}" placeholder="Ej: V-12345678"></div>
+            <div class="form-group"><label>Teléfono</label><input type="text" id="editTelefono" class="form-input" value="${currentProfileData.telefono || ''}" placeholder="Ej: 04141234567"></div>
+            <button class="submit-btn" onclick="guardarCambiosPerfil()">Guardar Cambios</button>
+            <button class="submit-btn" style="background: var(--surface-hover); color: var(--text-dark); margin-top: 10px; box-shadow: none;" onclick="closeModal()">Cancelar</button>
+        `;
+        openModal(html);
+    }
+
+    async function guardarCambiosPerfil() {
+        const nombre = document.getElementById('editNombre').value;
+        const apellido = document.getElementById('editApellido').value;
+        const cedula = document.getElementById('editCedula').value;
+        const telefono = document.getElementById('editTelefono').value;
+        
+        if(!nombre || !apellido) return showToast("Nombre y apellido son obligatorios.", "error");
+        
+        // Guardamos cédula en storage local como respaldo funcional
+        if(cedula) localStorage.setItem('userCedula', cedula);
+
+        try {
+            await apiFetch('/profile', { 
+                method: 'PUT', 
+                body: JSON.stringify({ 
+                    nombre, apellido, telefono, cedula,
+                    avatar_url: currentProfileData.avatar_url || null
+                }) 
+            });
+            showToast('Perfil actualizado correctamente.', 'success');
+            loadProfile(); closeModal();
+        } catch(e) { showToast(e.message, 'error'); }
+    }
+
+    // MÉTODOS DE PAGO FUNCIONALES
+    function abrirModalPagos() {
+        let metodos = JSON.parse(localStorage.getItem('userPaymentMethods') || '[]');
+        let listaHTML = metodos.map((m, i) => `
+            <div class="list-item-saved">
+                <div class="info"><strong>${m.tipo}</strong><small>${m.detalle}</small></div>
+                <button class="icon-btn" style="background:transparent; color:var(--danger);" onclick="eliminarMetodoPago(${i})"><i data-lucide="trash-2" style="width:16px;"></i></button>
+            </div>
+        `).join('');
+
+        const html = `
+            <h3 style="margin-bottom: 15px; font-weight: 800; text-align:center;">Métodos de Pago</h3>
+            <div id="listaMetodos" style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;">
+                ${listaHTML || '<p style="font-size:0.85rem; color:var(--text-muted); text-align:center;">No hay métodos registrados.</p>'}
+            </div>
+            <hr style="border:none; border-top:1px dashed var(--border-color); margin:15px 0;">
+            <div style="font-size: 0.9rem; font-weight: 800; margin-bottom: 10px;">Añadir Nuevo</div>
+            <div class="form-group">
+                <label>Tipo de Pago</label>
+                <select id="nuevoTipoPago" class="form-input">
+                    <option value="Pago Móvil">Pago Móvil</option>
+                    <option value="Zelle">Zelle</option>
+                    <option value="Efectivo / Divisas">Efectivo / Divisas</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Detalle (Teléfono / Correo / Descripción)</label>
+                <input type="text" id="nuevoDetallePago" class="form-input" placeholder="Ej: 0414-1234567 / correo@zelle.com">
+            </div>
+            <button class="submit-btn" onclick="agregarMetodoPago()" style="margin-bottom:10px;">Guardar Método</button>
+            <button class="btn-secondary" style="width:100%; box-shadow: none;" onclick="closeModal()">Cerrar</button>
+        `;
+        openModal(html);
+    }
+
+    window.agregarMetodoPago = function() {
+        const tipo = document.getElementById('nuevoTipoPago').value;
+        const detalle = document.getElementById('nuevoDetallePago').value;
+        if(!detalle) return showToast('Agrega el detalle del pago', 'error');
+        
+        let metodos = JSON.parse(localStorage.getItem('userPaymentMethods') || '[]');
+        metodos.push({ tipo, detalle });
+        localStorage.setItem('userPaymentMethods', JSON.stringify(metodos));
+        showToast('Método agregado', 'success');
+        abrirModalPagos(); // Recargar modal
+    };
+
+    window.eliminarMetodoPago = function(index) {
+        let metodos = JSON.parse(localStorage.getItem('userPaymentMethods') || '[]');
+        metodos.splice(index, 1);
+        localStorage.setItem('userPaymentMethods', JSON.stringify(metodos));
+        abrirModalPagos(); // Recargar modal
+    };
+
+    // ==========================================================
+    // DIRECCIONES GUARDADAS EN LA BASE DE DATOS (antes: localStorage)
+    // Ahora persisten entre dispositivos y sesiones, con coordenadas GPS.
+    // ==========================================================
+    function obtenerDirecciones() {
+        return Array.isArray(currentProfileData.direcciones) ? currentProfileData.direcciones : [];
+    }
+
+    async function guardarDirecciones(direcciones) {
+        await apiFetch('/profile', { method: 'PUT', body: JSON.stringify({ direcciones }) });
+        currentProfileData.direcciones = direcciones;
+    }
+
+    // Migración automática: si quedaron direcciones viejas en localStorage, se suben a la BD una sola vez
+    async function migrarDireccionesLocales() {
+        try {
+            const locales = JSON.parse(localStorage.getItem('userAddresses') || '[]');
+            if (locales.length === 0) return;
+            const actuales = obtenerDirecciones();
+            const nombres = new Set(actuales.map(d => d.nombre));
+            const nuevas = locales.filter(d => !nombres.has(d.nombre));
+            if (nuevas.length > 0) {
+                await guardarDirecciones([...actuales, ...nuevas]);
+                showToast(`${nuevas.length} dirección(es) migradas a tu cuenta.`, 'success');
+            }
+            localStorage.removeItem('userAddresses');
+        } catch (e) {}
+    }
+
+    function abrirModalDirecciones() {
+        const direcciones = obtenerDirecciones();
+        let listaHTML = direcciones.map((d, i) => `
+            <div class="list-item-saved">
+                <div class="info"><strong>${d.nombre}</strong><small>${d.direccion}${d.latitud ? ' · GPS guardado' : ''}</small></div>
+                <button class="icon-btn" style="background:transparent; color:var(--danger);" onclick="eliminarDireccion(${i})"><i data-lucide="trash-2" style="width:16px;"></i></button>
+            </div>
+        `).join('');
+
+        const html = `
+            <h3 style="margin-bottom: 15px; font-weight: 800; text-align:center;">Tus Direcciones</h3>
+            <p style="font-size:0.78rem; color:var(--text-muted); text-align:center; margin-bottom:12px;">Guardadas en tu cuenta: disponibles en cualquier dispositivo.</p>
+            <div id="listaDirecciones" style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;">
+                ${listaHTML || '<p style="font-size:0.85rem; color:var(--text-muted); text-align:center;">No hay direcciones guardadas.</p>'}
+            </div>
+            <hr style="border:none; border-top:1px dashed var(--border-color); margin:15px 0;">
+            <div style="font-size: 0.9rem; font-weight: 800; margin-bottom: 10px;">Añadir Nueva</div>
+            <div class="form-group">
+                <label>Etiqueta (Ej: Mi Casa, Trabajo)</label>
+                <input type="text" id="nuevaDirNombre" class="form-input" placeholder="Ej: Mi Casa">
+            </div>
+            <div class="form-group">
+                <label>Dirección completa</label>
+                <input type="text" id="nuevaDirDetalle" class="form-input" placeholder="Ej: Av. Principal, Casa 4">
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem; font-weight:700; color:var(--text-muted); margin-bottom:14px; cursor:pointer;">
+                <input type="checkbox" id="nuevaDirGPS" checked style="accent-color: var(--brand-main); width:16px; height:16px;"> Adjuntar mi ubicación GPS actual del mapa
+            </label>
+            <button class="submit-btn" onclick="agregarDireccion()" style="margin-bottom:10px;">Guardar Dirección</button>
+            <button class="btn-secondary" style="width:100%; box-shadow: none;" onclick="closeModal()">Cerrar</button>
+        `;
+        openModal(html);
+    }
+
+    window.agregarDireccion = async function() {
+        const nombre = document.getElementById('nuevaDirNombre').value.trim();
+        const direccion = document.getElementById('nuevaDirDetalle').value.trim();
+        const conGPS = document.getElementById('nuevaDirGPS').checked;
+        if(!nombre || !direccion) return showToast('Completa todos los campos', 'error');
+        try {
+            const direcciones = obtenerDirecciones();
+            direcciones.push({ nombre, direccion, latitud: conGPS ? userLat : null, longitud: conGPS ? userLng : null });
+            await guardarDirecciones(direcciones);
+            showToast('Dirección guardada en tu cuenta.', 'success');
+            abrirModalDirecciones();
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    window.eliminarDireccion = async function(index) {
+        try {
+            const direcciones = obtenerDirecciones();
+            direcciones.splice(index, 1);
+            await guardarDirecciones(direcciones);
+            abrirModalDirecciones();
+        } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    window.cargarDireccionRapida = function() {
+        const direcciones = obtenerDirecciones();
+        if(direcciones.length === 0) return showToast('No tienes direcciones guardadas. Créalas en Perfil > Direcciones.', 'error');
+
+        let listaHTML = direcciones.map((d, i) => `
+            <div class="list-item-saved" style="cursor:pointer;" onclick="seleccionarDireccion(${i})">
+                <div class="info"><strong>${d.nombre}</strong><small>${d.direccion}${d.latitud ? ' · GPS guardado' : ''}</small></div>
+            </div>
+        `).join('');
+
+        const html = `
+            <h3 style="margin-bottom: 15px; font-weight: 800; text-align:center;">Elige una Dirección</h3>
+            <div style="max-height: 250px; overflow-y: auto; margin-bottom: 15px;">${listaHTML}</div>
+            <button class="btn-secondary" style="width:100%; box-shadow: none;" onclick="closeModal()">Cancelar</button>
+        `;
+        openModal(html);
+    };
+
+    window.seleccionarDireccion = function(index) {
+        const d = obtenerDirecciones()[index];
+        if (!d) return;
+        document.getElementById('direccion').value = d.direccion;
+        // Si la dirección tiene GPS guardado, mover el marcador ahí
+        if (d.latitud && d.longitud) {
+            userLat = parseFloat(d.latitud); userLng = parseFloat(d.longitud);
+            detenerGPS();
+            if (usarGoogleMaps && gmap) { gmarker.setPosition({lat: userLat, lng: userLng}); gmap.setCenter({lat: userLat, lng: userLng}); gmap.setZoom(16); }
+            else if (map) { marker.setLatLng([userLat, userLng]); map.setView([userLat, userLng], 16); }
+        }
+        closeModal();
+        showToast(`Dirección "${d.nombre}" aplicada.`, 'success');
+    };
+
+    function abrirModalSoporte() {
+        const html = `<h3 style="margin-bottom: 10px; font-weight: 800; text-align:center;">Centro de Ayuda</h3><p style="font-size:0.9rem; color:var(--text-muted); text-align:center; margin-bottom:20px;">¿Necesitas asistencia técnica?</p><button class="submit-btn" style="background: #25D366; color: white; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.2);" onclick="window.open('https://wa.me/584240000000', '_blank')"><i data-lucide="message-circle" style="width:18px; height:18px;"></i> Escribir al WhatsApp</button><button class="submit-btn" style="background: var(--surface-hover); color: var(--text-dark); margin-top: 15px; box-shadow: none;" onclick="closeModal()">Cerrar</button>`;
+        openModal(html);
+    }
+    
+    function formatearEstado(estado) {
+        const estados = { 'buscando': 'Buscando', 'asignado': 'Asignado', 'en_camino': 'En Camino', 'en_proceso': 'En Proceso', 'completado': 'Completado', 'cancelado': 'Cancelado' };
+        return estados[estado] || estado;
+    }
+
+    document.getElementById('appModal').addEventListener('click', function(e) { if(e.target === this) closeModal(); });
+
+    init();
+</script>
+<script>
+    // PWA: registrar el service worker (necesario para instalar como app y para la TWA de Play Store)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+    }
+</script>
+</body>
+</html>
